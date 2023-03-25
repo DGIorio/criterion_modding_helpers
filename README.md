@@ -6,3 +6,4 @@ This tool adds the following modding helpers:
 - `Add material custom properties`: tool that fills the .blend materials with the default Burnout Paradise/Need for Speed Most Wanted 2012 shader properties
 - `Load effect/driver data`: tool that loads the effects and driver positions into the .blend file
 - `Generate resource IDs`: tool that generates valid resource IDs for the .blend data
+- `Identify texture types`: tool that identify texture types (diffuse, normal and specular)
