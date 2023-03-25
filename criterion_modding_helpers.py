@@ -4,7 +4,7 @@ bl_info = {
     "name": "Criterion modding helpers",
     "description": "Helping tools for developing mods for games from Criterion Games",
     "author": "DGIorio",
-    "version": (2, 1),
+    "version": (2, 2),
     "blender": (3, 1, 0),
     "location": "3D View > Add > Criterion modding tools",
     "warning": "",
@@ -1714,6 +1714,7 @@ class MESH_MT_criterion_modding_tools(bpy.types.Menu):
 		layout.menu("MESH_MT_material_properties_submenu", icon="ADD")
 		layout.menu("MESH_MT_load_effects_driver_submenu", icon="PASTEDOWN")
 		layout.menu("MESH_MT_calculate_crc32_submenu", icon="RNA_ADD")
+		layout.menu("MESH_MT_texture_type_identifier_submenu", icon="TEXTURE")
 
 
 """
@@ -1749,6 +1750,17 @@ class MESH_MT_calculate_crc32_submenu(bpy.types.Menu):
 		layout = self.layout
 		layout.operator(MESH_OT_bp_crc32.bl_idname, icon="EVENT_B")
 		layout.operator(MESH_OT_mw_crc32.bl_idname, icon="EVENT_N")
+
+
+class MESH_MT_texture_type_identifier_submenu(bpy.types.Menu):
+	"""Identify texture types"""
+	bl_idname = "MESH_MT_texture_type_identifier_submenu"
+	bl_label = "Identify texture types"
+
+	def draw(self, context):
+		layout = self.layout
+		#layout.operator(MESH_OT_bp_texture_type.bl_idname, icon="EVENT_B")
+		layout.operator(MESH_OT_mw_texture_type.bl_idname, icon="EVENT_N")
 
 
 """
@@ -1923,6 +1935,90 @@ class MESH_OT_mw_crc32(bpy.types.Operator):
 		return status
 
 
+class MESH_OT_mw_texture_type(bpy.types.Operator):
+	bl_idname = "mesh.mw_texture_type"
+	bl_label = "Need for Speed Most Wanted 2012"
+	bl_description = "Identify texture types"
+	
+	def execute(self, context):
+		self.report({'INFO'}, "Running identify texture types operator")
+		
+		sampler_types = ('DiffuseTextureSampler', 'SpecularTextureSampler', 'CrumpleTextureSampler', 'EffectsTextureSampler',
+						 'LightmapLightsTextureSampler', 'NormalTextureSampler', 'EmissiveTextureSampler', 'ColourSampler',
+						 'ExternalNormalTextureSampler', 'InternalNormalTextureSampler', 'DisplacementSampler',
+						 'CrackedGlassTextureSampler', 'CrackedGlassNormalTextureSampler', 'LightmapTextureSampler',
+						 'BlurNormalTextureSampler', 'BlurDiffuseTextureSampler', 'BlurEffectsTextureSampler',
+						 'BlurSpecularTextureSampler', 'AmbientOcclusionTextureSampler', 'AoSpecMapTextureSampler',
+						 'OverlayTextureSampler', 'ReflectionTextureSampler', 'IlluminanceTextureSampler', 'DiffuseSampler',
+						 'UvDistortionSampler', 'MaskTextureSampler', 'Tiling3NormalSampler', 'DecalTextureSampler',
+						 'Tiling1NormalSampler', 'Tiling3TextureSampler', 'Tiling2NormalSampler', 'Tiling2TextureSampler',
+						 'Tiling1TextureSampler', 'BlendTextureSampler', 'SpecularColourTextureSampler', 'NoiseTextureSampler',
+						 'ColourMap_Sampler', 'SpecColour_Sampler', 'Normal_Sampler', 'DetailMap_Normal_Sampler', 'RoadDepth_Sampler',
+						 'DetailMap_Diffuse_Sampler', 'PuddleTextureSampler', 'Line_Diffuse_Sampler', 'Line_NormalPlusSpec_Sampler',
+						 'AOMapTextureSampler', 'GradientRemapSampler', 'cubeSampler', 'RoadBlockTextureSampler',
+						 'SpecDepthAndRefractionTextureSampler', 'SurfNormalTextureSampler', 'DiffuseAndCausticsTextureSampler',
+						 'SurfTextureSampler', 'SurfMaskTextureSampler', 'RiverFloorTextureSampler', 'EdgeAlphaPlusAoMap_Sampler',
+						 'EdgeNormalMap_Sampler', 'Decal_Diffuse_Sampler', 'Decal_NormalPlusSpec_Sampler', 'NeonMaskTextureSampler',
+						 'NormalTexture2Sampler', 'SpecularTexture2Sampler', 'DiffuseTexture2Sampler', 'ProjectiveTextureSampler',
+						 'SlipDiffuseSampler', 'SpinDiffuseSampler', 'SlipNormalSampler', 'ThermalSampler', 'RunDiffuseSampler',
+						 'RunNormalSampler', 'SpinNormalSampler', 'RoughnessAOSampler', 'SpecularSampler', 'NormalSampler',
+						 'cubeReflectionSampler', 'NormalAndAlphaMaskSampler')
+		
+		for mat in bpy.data.materials:
+			if mat.node_tree == None:
+				continue
+			
+			sampler_types_used = []
+			for node in mat.node_tree.nodes:
+				if node.type == "TEX_IMAGE":
+					if node.name in sampler_types:
+						sampler_types_used.append(node.name)
+			
+			for node in mat.node_tree.nodes:
+				if node.type == "TEX_IMAGE":
+					if node.name not in sampler_types:
+						for link in node.outputs[0].links:
+							if link.to_node.bl_idname == "ShaderNodeBsdfPrincipled":
+								if link.to_node.inputs[:].index(link.to_socket) == 0 and "DiffuseTextureSampler" not in sampler_types_used:
+									node.name = "DiffuseTextureSampler"
+									sampler_types_used.append(node.name)
+								elif link.to_node.inputs[:].index(link.to_socket) == 7 and "SpecularTextureSampler" not in sampler_types_used:
+									node.name = "SpecularTextureSampler"
+									sampler_types_used.append(node.name)
+								elif link.to_node.inputs[:].index(link.to_socket) == 22 and "NormalTextureSampler" not in sampler_types_used:
+									node.name = "NormalTextureSampler"
+									sampler_types_used.append(node.name)
+							break # ignoring other links
+			
+			for node in mat.node_tree.nodes:
+				if node.type == "TEX_IMAGE":
+					if node.name not in sampler_types:
+						if len(node.outputs[0].links) == 0:
+							if node.name.lower() == "diffuse" and "DiffuseTextureSampler" not in sampler_types_used:
+								node.name = "DiffuseTextureSampler"
+								sampler_types_used.append(node.name)
+							elif node.name.lower() == "specular" and "SpecularTextureSampler" not in sampler_types_used:
+								node.name = "SpecularTextureSampler"
+								sampler_types_used.append(node.name)
+							elif node.name.lower() == "normal" and "NormalTextureSampler" not in sampler_types_used:
+								node.name = "NormalTextureSampler"
+								sampler_types_used.append(node.name)
+							elif node.name.lower() == "crumple" and "CrumpleTextureSampler" not in sampler_types_used:
+								node.name = "CrumpleTextureSampler"
+								sampler_types_used.append(node.name)
+							elif node.name.lower() == "emissive" and "EmissiveTextureSampler" not in sampler_types_used:
+								node.name = "EmissiveTextureSampler"
+								sampler_types_used.append(node.name)
+							elif node.name.lower() == "ao" and "AmbientOcclusionTextureSampler" not in sampler_types_used:
+								node.name = "AmbientOcclusionTextureSampler"
+								sampler_types_used.append(node.name)
+		
+		status = {'FINISHED'}
+		
+		self.report({'INFO'}, "Finished")
+		return status
+
+
 def menu_func(self, context):
 	self.layout.separator()
 	self.layout.menu(MESH_MT_criterion_modding_tools.bl_idname, icon="AUTO")
@@ -1933,11 +2029,13 @@ register_classes = (
 		MESH_MT_material_properties_submenu,
 		MESH_MT_load_effects_driver_submenu,
 		MESH_MT_calculate_crc32_submenu,
+		MESH_MT_texture_type_identifier_submenu,
 		MESH_OT_bp_properties,
 		MESH_OT_mw_properties,
 		MESH_OT_mw_load_effect_driver,
 		MESH_OT_bp_crc32,
 		MESH_OT_mw_crc32,
+		MESH_OT_mw_texture_type,
 )
 
 
