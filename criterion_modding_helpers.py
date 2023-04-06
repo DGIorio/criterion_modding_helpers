@@ -28,6 +28,10 @@ from bpy_extras.io_utils import (
 from mathutils import Matrix, Quaternion
 import math #pi
 import zlib
+try:
+	from mw_custom_materials import custom_shaders, get_default_material_parameters
+except:
+	print("WARNING: mw_custom_materials.py not found in Blender addons folder. Custom material data will not be available.")
 
 
 def main_bp():
@@ -93,7 +97,12 @@ def main_mw():
 		shader_path = os.path.join(shared_shader_dir, mShaderId + "_83.dat")
 		shader_description_, mVertexDescriptorId, num_sampler_states, required_raster_types, shader_parameters, material_constants = read_shader_mw(shader_path)
 		
-		status, material_parameters = get_default_material_parameters_mw(shader_type)
+		try:
+			status, material_parameters = get_default_material_parameters(shader_type)
+			material_parameters = [list(param) for param in material_parameters]
+		except:
+			print("WARNING: get_default_material_parameters function not found. Not all custom data will be available.")
+			status, material_parameters = get_default_material_parameters_mw(shader_type)
 		
 		if status == 0:
 			parameters_Data = material_parameters[3][:]
@@ -1046,33 +1055,49 @@ def get_mShaderID_mw(shader_description, resource_type):	#ok
 				'LightBuffer_KeylightAndAmbient_DebugLighting': 'FF_DF_05_00'}
 	
 	# Adding custom shaders
-	shaders['Glass'] = 'A7_EF_09_00'
-	shaders['VehicleNFS13_Mirror'] = 'A9_EF_09_00'
-	shaders['Mirror'] = 'A9_EF_09_00'
-	shaders['VehicleNFS13_Body_Chrome'] = '92_EF_09_00'
-	shaders['VehicleNFS13_Chrome'] = '92_EF_09_00'
-	shaders['Chrome'] = '92_EF_09_00'
-	shaders['VehicleNFS13_Body_Tyre'] = '9B_EF_09_00'
-	shaders['VehicleNFS13_Tyre'] = '9B_EF_09_00'
-	shaders['Tyre'] = '9B_EF_09_00'
-	shaders['Licenseplate'] = '7E_EF_09_00'
-	shaders['License_Plate'] = '7E_EF_09_00'
-	shaders['VehicleNFS13_Licenseplate'] = '7E_EF_09_00'
-	shaders['VehicleNFS13_License_Plate'] = '7E_EF_09_00'
-	shaders['Licenseplate_Number'] = '9C_D4_10_00'
-	shaders['License_Plate_Number'] = '9C_D4_10_00'
-	shaders['VehicleNFS13_Licenseplate_Number'] = '9C_D4_10_00'
-	shaders['VehicleNFS13_License_Plate_Number'] = '9C_D4_10_00'
-	shaders['dullplastic'] = '92_EF_09_00'
-	shaders['Interior'] = '9B_EF_09_00'
-	shaders['VehicleNFS13_Interior'] = '9B_EF_09_00'
-	shaders['Metal'] = '72_EF_09_00'
-	shaders['BodyPaint_Livery'] = '72_EF_09_00'
-	shaders['BodyPaint'] = '76_EF_09_00'
-	shaders['BodyColor'] = '92_EF_09_00'
-	shaders['Badge'] = '8A_EF_09_00'
-	shaders['Emblem'] = '8A_EF_09_00'
-	shaders['Symbol'] = '8A_EF_09_00'
+	try:
+		shaders.update(custom_shaders())
+	except:
+		print("WARNING: custom_shaders function not found. Custom data will not be available.")
+		shaders['Glass'] = 'A9_EF_09_00'
+		shaders['VehicleNFS13_Mirror'] = 'A9_EF_09_00'
+		shaders['Mirror'] = 'A9_EF_09_00'
+		shaders['VehicleNFS13_Body_Chrome'] = '92_EF_09_00'
+		shaders['VehicleNFS13_Chrome'] = '92_EF_09_00'
+		shaders['Chrome'] = '92_EF_09_00'
+		shaders['VehicleNFS13_Body_Tyre'] = '9B_EF_09_00'
+		shaders['VehicleNFS13_Tyre'] = '9B_EF_09_00'
+		shaders['Tyre'] = '9B_EF_09_00'
+		shaders['Tire'] = '9B_EF_09_00'
+		shaders['Licenseplate'] = '7E_EF_09_00'
+		shaders['LicensePlate'] = '7E_EF_09_00'
+		shaders['License_Plate'] = '7E_EF_09_00'
+		shaders['VehicleNFS13_Licenseplate'] = '7E_EF_09_00'
+		shaders['VehicleNFS13_License_Plate'] = '7E_EF_09_00'
+		shaders['Licenseplate_Number'] = '9C_D4_10_00'
+		shaders['License_Plate_Number'] = '9C_D4_10_00'
+		shaders['VehicleNFS13_Licenseplate_Number'] = '9C_D4_10_00'
+		shaders['VehicleNFS13_License_Plate_Number'] = '9C_D4_10_00'
+		shaders['DullPlastic'] = '92_EF_09_00'
+		shaders['Dull_Plastic'] = '92_EF_09_00'
+		shaders['dullplastic'] = '92_EF_09_00'
+		shaders['Interior'] = '9B_EF_09_00'
+		shaders['VehicleNFS13_Interior'] = '9B_EF_09_00'
+		shaders['Metal'] = '72_EF_09_00'
+		shaders['BodyPaint_Livery'] = '72_EF_09_00'
+		shaders['BodyPaint'] = '76_EF_09_00'
+		shaders['BodyColor'] = '92_EF_09_00'
+		shaders['Badge'] = '8A_EF_09_00'
+		shaders['Emblem'] = '8A_EF_09_00'
+		shaders['Symbol'] = '8A_EF_09_00'
+		shaders['Grill'] = '8A_EF_09_00'
+		shaders['Transparent'] = '8A_EF_09_00'
+		shaders['VehicleNFS13_Caliper'] = 'B5_EF_09_00'
+		shaders['Caliper'] = 'B5_EF_09_00'
+		shaders['Caliper_Textured'] = 'B5_EF_09_00'
+		shaders['VehicleNFS13_BrakeDisc'] = 'B5_EF_09_00'
+		shaders['brakedisc'] = 'B5_EF_09_00'
+		shaders['BrakeDisc'] = 'B5_EF_09_00'
 	
 	try:
 		mShaderId = shaders[shader_description]
@@ -1104,7 +1129,10 @@ def get_mShaderID_mw(shader_description, resource_type):	#ok
 		except:
 			mShaderId = ""
 		if mShaderId == "":
-			if resource_type == "GraphicsSpec":
+			if resource_type == "InstanceList":
+				shader_description = 'WorldPBR_Diffuse_Normal_Specular_Reflective_AO_1Bit_Singlesided'
+				mShaderId = shaders[shader_description]
+			elif resource_type == "GraphicsSpec":
 				shader_description = 'VehicleNFS13_BodyPaint_Livery'
 				mShaderId = shaders[shader_description]
 			elif resource_type == "CharacterSpec":
