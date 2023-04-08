@@ -15,11 +15,13 @@ bl_info = {
 
 
 import bpy
+import bmesh
 import os
 import struct
 import binascii
 from bpy.props import (
 	BoolProperty,
+	EnumProperty,
 )
 from bpy_extras.io_utils import (
 	orientation_helper,
@@ -27,6 +29,7 @@ from bpy_extras.io_utils import (
 )
 from mathutils import Matrix, Quaternion
 import math #pi
+import numpy as np
 import zlib
 try:
 	from mw_custom_materials import custom_shaders, get_default_material_parameters
@@ -1743,6 +1746,7 @@ class MESH_MT_criterion_modding_tools(bpy.types.Menu):
 		layout.menu("MESH_MT_load_effects_driver_submenu", icon="PASTEDOWN")
 		layout.menu("MESH_MT_calculate_crc32_submenu", icon="RNA_ADD")
 		layout.menu("MESH_MT_texture_type_identifier_submenu", icon="TEXTURE")
+		layout.menu("MESH_MT_transfer_blend_data_submenu", icon="UV_SYNC_SELECT")
 
 
 """
@@ -1789,6 +1793,17 @@ class MESH_MT_texture_type_identifier_submenu(bpy.types.Menu):
 		layout = self.layout
 		#layout.operator(MESH_OT_bp_texture_type.bl_idname, icon="EVENT_B")
 		layout.operator(MESH_OT_mw_texture_type.bl_idname, icon="EVENT_N")
+
+
+class MESH_MT_transfer_blend_data_submenu(bpy.types.Menu):
+	"""Transfer blend data"""
+	bl_idname = "MESH_MT_transfer_blend_data_submenu"
+	bl_label = "Transfer blend data"
+
+	def draw(self, context):
+		layout = self.layout
+		#layout.operator(MESH_OT_bp_transfer_blend_data.bl_idname, icon="EVENT_B")
+		layout.operator(MESH_OT_mw_transfer_blend_data.bl_idname, icon="EVENT_N")
 
 
 """
@@ -2047,6 +2062,188 @@ class MESH_OT_mw_texture_type(bpy.types.Operator):
 		return status
 
 
+def get_collections(scene, context):
+		items = []
+		for i, collection in enumerate(bpy.data.collections):
+			items.append(('OPT_%d' % i, collection.name, collection.name))
+		
+		return tuple(items)
+
+
+class MESH_OT_mw_transfer_blend_data(bpy.types.Operator):
+	bl_idname = "mesh.mw_transfer_blend_data"
+	bl_label = "Need for Speed Most Wanted 2012"
+	bl_description = "Transfer blend indices and weight data from source objects to target objects"
+	
+	
+	src_collection: EnumProperty(
+			name="Source collection",
+			description="Choose the collection with the source objects",
+			items=get_collections,
+			)
+	
+	tgt_collection: EnumProperty(
+			name="Target collection",
+			description="Choose the collection with the target objects",
+			items=get_collections,
+			)
+	
+	ignore_src_hidden_meshes: BoolProperty(
+			name="Ignore source hidden meshes",
+			description="Check in order to ignore the hidden meshes of the source collection",
+			default=True,
+			)
+	
+	ignore_tgt_hidden_meshes: BoolProperty(
+			name="Ignore target hidden meshes",
+			description="Check in order to ignore the hidden meshes of the target collection",
+			default=True,
+			)
+
+	@classmethod 
+	def poll(cls, context):
+		return bpy.context.scene != None
+
+	def draw(self, context):
+		layout = self.layout
+		layout.use_property_split = False
+		layout.use_property_decorate = False  # No animation.
+		
+		##
+		box = layout.box()
+		split = box.split(factor=0.75)
+		col = split.column(align=True)
+		col.label(text="Settings", icon="SETTINGS")
+		
+		box.prop(self, "src_collection")
+		box.prop(self, "tgt_collection")
+		
+		box.prop(self, "ignore_src_hidden_meshes")
+		box.prop(self, "ignore_tgt_hidden_meshes")
+
+
+	def invoke(self, context, event):
+		wm = context.window_manager
+		
+		return wm.invoke_props_dialog(self, width=400)
+
+
+	def execute(self, context):
+		self.report({'INFO'}, "Running transfer blend data operator")
+		
+		
+		def closest_node(node, nodes):
+			nodes = np.asarray(nodes)
+			deltas = nodes - node
+			dist_2 = np.einsum('ij,ij->i', deltas, deltas)
+			return np.argmin(dist_2)
+		
+		
+		#os.system('cls')
+		#start_time = time.time()
+		
+		## Getting source and target collection names
+		items_callback = self.__annotations__.get("src_collection").keywords.get("items")
+		items = items_callback(self, context)
+		
+		src_collection_name = next(item[1] for item in items if item[0] == self.src_collection)
+		tgt_collection_name = next(item[1] for item in items if item[0] == self.tgt_collection)
+		
+		
+		## Getting source and target objects
+		src_objects = []
+		tgt_objects = []
+		
+		for object in bpy.data.collections[src_collection_name].objects:
+			if object.type != "MESH":
+				continue
+			if object.hide_get() == True and self.ignore_src_hidden_meshes == True:
+				continue
+			src_objects.append(object)
+		
+		for object in bpy.data.collections[tgt_collection_name].objects:
+			if object.type != "MESH":
+				continue
+			if object.hide_get() == True  and self.ignore_tgt_hidden_meshes == True:
+				continue
+			tgt_objects.append(object)
+		
+		## Getting data
+		bm = bmesh.new()
+		src_coordinates = []
+		blends_indices = []
+		blends_weights = []
+		for src_object in src_objects:
+			src_mesh = src_object.data
+			
+			bm.from_mesh(src_mesh)
+			
+			blend_index1 = (bm.verts.layers.int.get("blend_index1") or bm.verts.layers.int.new('blend_index1'))
+			blend_index2 = (bm.verts.layers.int.get("blend_index2") or bm.verts.layers.int.new('blend_index2'))
+			blend_index3 = (bm.verts.layers.int.get("blend_index3") or bm.verts.layers.int.new('blend_index3'))
+			blend_index4 = (bm.verts.layers.int.get("blend_index4") or bm.verts.layers.int.new('blend_index4'))
+			
+			blend_weight1 = (bm.verts.layers.float.get("blend_weight1") or bm.verts.layers.float.new('blend_weight1'))
+			blend_weight2 = (bm.verts.layers.float.get("blend_weight2") or bm.verts.layers.float.new('blend_weight2'))
+			blend_weight3 = (bm.verts.layers.float.get("blend_weight3") or bm.verts.layers.float.new('blend_weight3'))
+			blend_weight4 = (bm.verts.layers.float.get("blend_weight4") or bm.verts.layers.float.new('blend_weight4'))
+			
+			src_matrix = src_object.matrix_world
+			
+			for vert in bm.verts:
+				vert_co = src_matrix @ vert.co
+				src_coordinates.append(vert_co)
+				
+				blends_indices.append([vert[blend_index1], vert[blend_index2], vert[blend_index3], vert[blend_index4]])
+				blends_weights.append([vert[blend_weight1], vert[blend_weight2], vert[blend_weight3], vert[blend_weight4]])
+			
+			bm.clear()
+		
+		src_coordinates = np.asarray(src_coordinates)
+		
+		for tgt_object in tgt_objects:
+			tgt_mesh = tgt_object.data
+			
+			bm.from_mesh(tgt_mesh)
+			
+			blend_index1 = (bm.verts.layers.int.get("blend_index1") or bm.verts.layers.int.new('blend_index1'))
+			blend_index2 = (bm.verts.layers.int.get("blend_index2") or bm.verts.layers.int.new('blend_index2'))
+			blend_index3 = (bm.verts.layers.int.get("blend_index3") or bm.verts.layers.int.new('blend_index3'))
+			blend_index4 = (bm.verts.layers.int.get("blend_index4") or bm.verts.layers.int.new('blend_index4'))
+			
+			blend_weight1 = (bm.verts.layers.float.get("blend_weight1") or bm.verts.layers.float.new('blend_weight1'))
+			blend_weight2 = (bm.verts.layers.float.get("blend_weight2") or bm.verts.layers.float.new('blend_weight2'))
+			blend_weight3 = (bm.verts.layers.float.get("blend_weight3") or bm.verts.layers.float.new('blend_weight3'))
+			blend_weight4 = (bm.verts.layers.float.get("blend_weight4") or bm.verts.layers.float.new('blend_weight4'))
+			
+			tgt_matrix = tgt_object.matrix_world
+			
+			for vert in bm.verts:
+				idx = closest_node(tgt_matrix @ vert.co, src_coordinates)
+				vert[blend_index1] = blends_indices[idx][0]
+				vert[blend_index2] = blends_indices[idx][1]
+				vert[blend_index3] = blends_indices[idx][2]
+				vert[blend_index4] = blends_indices[idx][3]
+
+				vert[blend_weight1] = blends_weights[idx][0]
+				vert[blend_weight2] = blends_weights[idx][1]
+				vert[blend_weight3] = blends_weights[idx][2]
+				vert[blend_weight4] = blends_weights[idx][3]
+			
+			bm.to_mesh(tgt_mesh)
+			bm.clear()
+		
+		bm.free()
+		
+		#elapsed_time = time.time() - start_time
+		#print("Elapsed time: %.4fs" % elapsed_time)
+		
+		status = {'FINISHED'}
+		
+		self.report({'INFO'}, "Finished")
+		return status
+
+
 def menu_func(self, context):
 	self.layout.separator()
 	self.layout.menu(MESH_MT_criterion_modding_tools.bl_idname, icon="AUTO")
@@ -2058,12 +2255,14 @@ register_classes = (
 		MESH_MT_load_effects_driver_submenu,
 		MESH_MT_calculate_crc32_submenu,
 		MESH_MT_texture_type_identifier_submenu,
+		MESH_MT_transfer_blend_data_submenu,
 		MESH_OT_bp_properties,
 		MESH_OT_mw_properties,
 		MESH_OT_mw_load_effect_driver,
 		MESH_OT_bp_crc32,
 		MESH_OT_mw_crc32,
 		MESH_OT_mw_texture_type,
+		MESH_OT_mw_transfer_blend_data,
 )
 
 
