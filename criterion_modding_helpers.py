@@ -4,7 +4,7 @@ bl_info = {
     "name": "Criterion modding helpers",
     "description": "Helping tools for developing mods for games from Criterion Games",
     "author": "DGIorio",
-    "version": (2, 3),
+    "version": (2, 4),
     "blender": (3, 1, 0),
     "location": "3D View > Add > Criterion modding tools",
     "warning": "",
@@ -1172,6 +1172,9 @@ def get_mShaderID_mw(shader_description, resource_type):	#ok
 			elif resource_type == "GraphicsSpec":
 				shader_description = 'VehicleNFS13_BodyPaint_Livery'
 				mShaderId = shaders[shader_description]
+			elif resource_type == "WheelGraphicsSpec":
+				shader_description = 'VehicleNFS13_Wheel_Textured_Roughness'
+				mShaderId = shaders[shader_description]
 			elif resource_type == "CharacterSpec":
 				shader_description = 'CharacterNew_Opaque_Textured_Normal_Spec_VertexAO'
 				mShaderId = shaders[shader_description]
@@ -1444,6 +1447,8 @@ def bp_convert_to_crc(append_type=True, append_random_int=True):
 		mesh = object.data
 		for material in mesh.materials:
 			if material not in materials:
+				if material == None:
+					continue
 				materials.append(material)
 	
 	## Generating CRC32
@@ -1639,6 +1644,8 @@ def mw_convert_to_crc(append_type=True, append_random_int=True):
 		mesh = object.data
 		for material in mesh.materials:
 			if material not in materials:
+				if material == None:
+					continue
 				materials.append(material)
 	
 	## Generating CRC32
@@ -2296,7 +2303,6 @@ class MESH_OT_mw_transfer_blend_data(bpy.types.Operator):
 		
 		src_collection_name = next(item[1] for item in items if item[0] == self.src_collection)
 		tgt_collection_name = next(item[1] for item in items if item[0] == self.tgt_collection)
-		
 		
 		## Getting source and target objects
 		src_objects = []
