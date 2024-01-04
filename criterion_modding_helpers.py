@@ -4,7 +4,7 @@ bl_info = {
     "name": "Criterion modding helpers",
     "description": "Helping tools for developing mods for games from Criterion Games",
     "author": "DGIorio",
-    "version": (2, 4),
+    "version": (3, 0, 1),
     "blender": (3, 1, 0),
     "location": "3D View > Add > Criterion modding tools",
     "warning": "",
@@ -32,9 +32,13 @@ import math #pi
 import numpy as np
 import zlib
 try:
-	from mw_custom_materials import custom_shaders, get_default_material_parameters
+	from mw_custom_materials import custom_shaders as custom_shaders_mw, get_default_material_parameters as get_default_material_parameters_mw
 except:
 	print("WARNING: mw_custom_materials.py not found in Blender addons folder. Custom material data will not be available.")
+try:
+	from hp_custom_materials import custom_shaders as custom_shaders_hp, get_default_material_parameters as get_default_material_parameters_hp
+except:
+	print("WARNING: hp_custom_materials.py not found in Blender addons folder. Custom material data will not be available.")
 
 
 def main_bp():
@@ -101,11 +105,11 @@ def main_mw():
 		shader_description_, mVertexDescriptorId, num_sampler_states, required_raster_types, shader_parameters, material_constants = read_shader_mw(shader_path)
 		
 		try:
-			status, material_parameters = get_default_material_parameters(shader_type)
+			status, material_parameters = get_default_material_parameters_mw(shader_type)
 			material_parameters = [list(param) for param in material_parameters]
 		except:
 			print("WARNING: get_default_material_parameters function not found. Not all custom data will be available.")
-			status, material_parameters = get_default_material_parameters_mw(shader_type)
+			status, material_parameters = get_default_material_parameters_mw_copy(shader_type)
 		
 		if status == 0:
 			parameters_Data = material_parameters[3][:]
@@ -117,6 +121,67 @@ def main_mw():
 		for i in range(0, len(parameters_Names)):
 			if not parameters_Names[i] in material:
 				material[parameters_Names[i]] = parameters_Data[i][:]
+			
+			if parameters_Names[i] in ('MaterialDiffuse', 'LightmapColour', 'LitWindowColour', 'materialDiffuse', 'tiling1Diffuse', 'tiling3Diffuse', 'tiling2Diffuse', 'decal_Diffuse',
+										   'Colour', 'Line_Diffuse', 'MaterialSpecular', 'algaeColour', 'LightmappedLightsGreenChannelColour', 'PbrMaterialScuffColour', 'EmissiveColour',
+										   'PbrMaterialDiffuseColour', 'LightmappedLightsAlphaChannelColour', 'LightmappedLightsBlueChannelColour', 'LightmappedLightsRedChannelColour',
+										   'PbrMaterialSpecularColour', 'ReversingColour', 'mExternalGlassColour', 'TaillightColour', 'BrakeColour', 'HeadlightColour', 'PbrMaterialDustColour',
+										   'mCrackedGlassSpecularColour', 'PbrMaterialDirtColour', 'DebugOverride_GlassVolumeColour', 'RunningColour', 'MaterialColour_SimpleMultiply'):
+				property_manager = material.id_properties_ui(parameters_Names[i])
+				property_manager.update(subtype = 'COLOR')
+	
+	return {'FINISHED'}
+
+
+def main_hp():
+	shared_dir = os.path.join(NFSHPLibraryGet(), "NFSHPR_Library_PC")
+	shared_shader_dir = os.path.join(os.path.join(shared_dir, "SHADERS"), "Shader")
+	resource_version = "NFSHPR_PC"
+	
+	for material in bpy.data.materials:
+		shader_type = "VehicleNFS13_BodyPaint_Livery"
+		shader_type_default = shader_type
+		
+		if not "shader_type" in material:
+			material["shader_type"] = shader_type
+		else:
+			shader_type = material["shader_type"]
+		
+		if shader_type == "":
+			shader_type = shader_type_default
+			material["shader_type"] = shader_type_default
+		
+		mShaderId, shader_type = get_mShaderID_hp(shader_type, "GraphicsSpec")
+		material["shader_type"] = shader_type
+		
+		shader_path = os.path.join(shared_shader_dir, mShaderId + "_83.dat")
+		shader_description_, mVertexDescriptorId, num_sampler_states, required_raster_types, shader_parameters, material_constants = read_shader_hp(shader_path, resource_version)
+		
+		try:
+			status, material_parameters = get_default_material_parameters_hp(shader_type)
+			material_parameters = [list(param) for param in material_parameters]
+		except:
+			print("WARNING: get_default_material_parameters function not found. Not all custom data will be available.")
+			status, material_parameters = get_default_material_parameters_hp_copy(shader_type)
+		
+		if status == 0:
+			parameters_Data = material_parameters[3][:]
+			parameters_Names = material_parameters[4][:]
+		else:
+			parameters_Data = shader_parameters[3][:]
+			parameters_Names = shader_parameters[4][:]
+		
+		for i in range(0, len(parameters_Names)):
+			if not parameters_Names[i] in material:
+				material[parameters_Names[i]] = parameters_Data[i][:]
+			
+			if parameters_Names[i] in ('DirtTint', 'materialDiffuse', 'LightmappedLightsGreenChannelColour', 'LightmappedLightsBlueChannelColour',
+										'LightmappedLightsRedChannelColour', 'window_Tint', 'pearlescentColour', 'ReversingColour', 'UnusedColour',
+										'mCrackedGlassSpecularColour', 'BrakeColour', 'RunningColour', 'mGlassColour', 'OverlayA_Diffuse', 'DiffuseB',
+										'OverlayB_Diffuse', 'DiffuseA', 'Colour', 'gEmissiveColour', 'tiling1Diffuse', 'tiling3Diffuse', 'tiling2Diffuse',
+										'decal_Diffuse', 'mMaterialDiffuse', 'Line_Diffuse', 'DiffuseColour', 'EmissiveColour', 'algaeColour', 'mExternalGlassColour'):
+				property_manager = material.id_properties_ui(parameters_Names[i])
+				property_manager.update(subtype = 'COLOR')
 	
 	return {'FINISHED'}
 
@@ -163,7 +228,9 @@ def load_vehicle_data_mw(m):
 		
 		if resource_type == "GraphicsSpec":
 			vehicle_name = main_collection.name
-			vehicle_number = vehicle_name.replace("VEH", "").replace("HI", "").replace("LO", "").replace("TR", "").replace("GR", "").replace("MS", "").replace("_", "")
+			vehicle_number = vehicle_name.replace("VEH", "").replace("HI", "").replace("LO", "").replace("TR", "").replace("GR", "").replace("MS", "")
+			vehicle_number = vehicle_number.replace("veh", "").replace("hi", "").replace("lo", "").replace("tr", "").replace("gr", "").replace("ms", "").replace("_", "")
+			
 			try:
 				test = int(vehicle_number)
 			except:
@@ -173,8 +240,8 @@ def load_vehicle_data_mw(m):
 			
 			collections = [graphicsspec_collection,]
 			
-			
 			vehicle_dir = os.path.join(shared_vehicles_dir, vehicle_name)
+			skeleton_dir = os.path.join(vehicle_dir, "Skeleton")
 			genesysobject_dir = os.path.join(vehicle_dir, "GenesysObject")
 			graphicsspec_dir = os.path.join(vehicle_dir, "GraphicsSpec")
 			graphicsspec_path = os.path.join(graphicsspec_dir, mGraphicsSpecId + ".dat")
@@ -182,6 +249,52 @@ def load_vehicle_data_mw(m):
 				if mGraphicsSpecId in file:
 					graphicsspec_path = os.path.join(graphicsspec_dir, file)
 					break
+			
+			if "Skeleton" in collections_types:
+				pass
+			else:
+				_, _, _, mSkeletonId, _ = read_graphicsspec_mw(graphicsspec_path)
+				skeleton_path = os.path.join(skeleton_dir, mSkeletonId + ".dat")
+				Skeleton = []
+				if os.path.isfile(skeleton_path) == True:
+					Skeleton = read_skeleton_mw(skeleton_path)
+				
+				if len(Skeleton) > 0:
+					skeleton_collection = bpy.data.collections.new(vehicle_number + "_Skeleton")
+					skeleton_collection["resource_type"] = "Skeleton"
+					skeleton_collection["SkeletonID"] = mSkeletonId
+					main_collection["SkeletonID"] = mSkeletonId
+					skeleton_collection.color_tag = "COLOR_07"
+					main_collection.children.link(skeleton_collection)
+					
+					character_name = 0
+					for i, sensor in enumerate(Skeleton):
+						sensor_index, mSensorPosition, mSensorRotation, parent_sensor, relative_sensor, child_sensor, sensor_hash = sensor
+						
+						if resource_type == "GraphicsSpec":
+							sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, int(vehicle_number))
+						elif resource_type == "CharacterSpec":
+							sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, character_name)
+						sensor_empty = bpy.data.objects.new(sensor_empty_name, None)
+						if resource_type == "GraphicsSpec":
+							sensor_empty.empty_display_type = 'SPHERE'
+							sensor_empty.empty_display_size = 0.025
+							sensor_empty.show_name = True
+							sensor_empty.show_in_front = True
+						elif resource_type == "CharacterSpec":
+							sensor_empty.empty_display_type = 'SPHERE'
+							sensor_empty.empty_display_size = 0.025
+							sensor_empty.show_name = False
+							sensor_empty.show_in_front = True
+						skeleton_collection.objects.link(sensor_empty)
+						
+						sensor_empty["parent_sensor"] = parent_sensor
+						sensor_empty["correlated_sensor"] = relative_sensor
+						sensor_empty["child_sensor"] = child_sensor
+						sensor_empty["sensor_hash"] = int_to_id(sensor_hash)
+						
+						mTransform = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [*mSensorPosition, 1.0]]).transposed()
+						sensor_empty.matrix_world = m @ mTransform
 			
 			if "Effects" in collections_types:
 				pass
@@ -193,7 +306,7 @@ def load_vehicle_data_mw(m):
 				
 				# Creating effects object
 				# Creating collection
-				effects_collection = bpy.data.collections.new(vehicle_name + "_Effects")
+				effects_collection = bpy.data.collections.new(vehicle_number + "_Effects")
 				effects_collection["resource_type"] = "Effects"
 				effects_collection.color_tag = "COLOR_05"
 				main_collection.children.link(effects_collection)
@@ -202,7 +315,7 @@ def load_vehicle_data_mw(m):
 				for effect_instance in instances_effects2:
 					EffectId, i, effectsLocation, EffectData = effect_instance
 					
-					effect_object_name = "Effect_%d.%s" % (i, vehicle_name)
+					effect_object_name = "Effect_%d.%s" % (i, vehicle_number)
 					effect_empty = bpy.data.objects.new(effect_object_name, None)
 					effects_collection.objects.link(effect_empty)
 					
@@ -212,7 +325,7 @@ def load_vehicle_data_mw(m):
 					effect_empty.matrix_world = m @ effect_empty.matrix_world
 					
 					for j, effectLocation in enumerate(effectsLocation):
-						effect_object_name2 = "Effect_%d_copy_%d.%s" % (i, j, vehicle_name)
+						effect_object_name2 = "Effect_%d_copy_%d.%s" % (i, j, vehicle_number)
 						effect_empty2 = bpy.data.objects.new(effect_object_name2, None)
 						effect_empty2.parent = effect_empty
 						
@@ -225,10 +338,9 @@ def load_vehicle_data_mw(m):
 						effect_empty2.empty_display_size = 0.5
 						
 						if EffectData != []:
-							effect_empty2['EffectData'] = EffectData[j]
+							effect_empty2['sensor_hash'] = int_to_id(EffectData[j])
 						
 						effects_collection.objects.link(effect_empty2)
-				##
 			
 			if "Character" in collections_types:
 				pass
@@ -240,7 +352,7 @@ def load_vehicle_data_mw(m):
 				
 				## Creating driver object
 				# Creating collection
-				character_collection = bpy.data.collections.new(vehicle_name + "_Driver")
+				character_collection = bpy.data.collections.new(vehicle_number + "_Driver")
 				character_collection["resource_type"] = "Character"
 				character_collection.color_tag = "COLOR_06"
 				main_collection.children.link(character_collection)
@@ -248,7 +360,7 @@ def load_vehicle_data_mw(m):
 				# Creating driver object
 				mCharacterSpecID, characterOffset = instances_character
 				
-				driver_object_name = "%s_Driver" % (vehicle_name)
+				driver_object_name = "%s_Driver" % (vehicle_number)
 				driver_empty = bpy.data.objects.new(driver_object_name, None)
 				driver_empty["CharacterSpecID"] = mCharacterSpecID
 				character_collection.objects.link(driver_empty)
@@ -273,6 +385,7 @@ def load_vehicle_data_mw(m):
 				driver_empty.matrix_world = m @ mLocatorMatrix
 	
 	return {'FINISHED'}
+
 
 def read_genesysobject1(genesysobject_dir, genesysobject_path):
 	with open(genesysobject_path, "rb") as f:
@@ -331,7 +444,7 @@ def read_effects_graphicsspec(graphicsspec_path):
 				
 				if unknown_pointer != 0:
 					f.seek(unknown_pointer + 0x4*j, 0)
-					effect_data = struct.unpack("<i", f.read(0x4))[0]
+					effect_data = struct.unpack("<I", f.read(0x4))[0]
 					EffectData.append(effect_data)
 				
 				instances_effects.append([EffectsId, i, j, effectLocation[:], EffectData[:]])
@@ -340,6 +453,626 @@ def read_effects_graphicsspec(graphicsspec_path):
 			
 	
 	return (instances_effects, instances_effects2)
+
+
+def load_vehicle_data_hp(m):
+	shared_dir = os.path.join(NFSHPLibraryGet(), "NFSHPR_Library_PC")
+	shared_vehicles_dir = os.path.join(shared_dir, "VEHICLES")
+	shared_character_dir = os.path.join(shared_dir, "CHARACTERS")
+	characterLibrary = os.path.join(shared_dir, "CHARACTERS", "ALL_CHARS.blend")
+	resource_version = "NFSHPR_PC"
+	
+	#m = axis_conversion(from_forward='-Y', from_up='Z', to_forward='-Z', to_up='X').to_4x4()
+	
+	for main_collection in bpy.context.scene.collection.children:
+		is_hidden = bpy.context.view_layer.layer_collection.children.get(main_collection.name).hide_viewport
+		is_excluded = bpy.context.view_layer.layer_collection.children.get(main_collection.name).exclude
+		
+		if is_hidden or is_excluded:
+			print("WARNING: skipping main collection %s since it is hidden or excluded." % (main_collection.name))
+			print("")
+			continue
+		
+		print("Reading scene data for main collection %s..." % (main_collection.name))
+			
+		# GraphicsSpec
+		if "resource_type" in main_collection:
+			resource_type = main_collection["resource_type"]
+		else:
+			print("WARNING: collection %s is missing parameter %s. Define one of the followings: 'GraphicsSpec', 'CharacterSpec'." % (main_collection.name, '"resource_type"'))
+			resource_type = "GraphicsSpec"
+			#return {"CANCELLED"}
+		
+		try:
+			collections_types = {collection["resource_type"] : collection for collection in main_collection.children}
+		except:
+			print("WARNING: some collection is missing parameter %s. Define one of the followings: 'GraphicsSpec', 'WheelGraphicsSpec', 'PolygonSoupList', 'Character', 'CharacterSpec'." % '"resource_type"')
+			collections_types = {}
+			for collection in main_collection.children:
+				try:
+					collections_types[collection["resource_type"]] = collection
+				except:
+					collections_types["GraphicsSpec"] = collection
+				
+			#return {"CANCELLED"}
+		
+		if resource_type == "GraphicsSpec":
+			vehicle_name = main_collection.name
+			vehicle_number = vehicle_name.replace("VEH", "").replace("HI", "").replace("LO", "").replace("TR", "").replace("GR", "").replace("MS", "")
+			vehicle_number = vehicle_number.replace("veh", "").replace("hi", "").replace("lo", "").replace("tr", "").replace("gr", "").replace("ms", "").replace("_", "")
+			
+			try:
+				test = int(vehicle_number)
+			except:
+				print("ERROR: main_collection's name is in the wrong format. Use something like VEH_122672_MS.")
+			mGraphicsSpecId = int_to_id(vehicle_number)
+			graphicsspec_collection = collections_types["GraphicsSpec"]
+			
+			collections = [graphicsspec_collection,]
+			
+			vehicle_dir = os.path.join(shared_vehicles_dir, vehicle_name)
+			skeleton_dir = os.path.join(vehicle_dir, "Skeleton")
+			genesyinstance_dir = os.path.join(vehicle_dir, "GenesysInstance")
+			graphicsspec_dir = os.path.join(vehicle_dir, "GraphicsSpec")
+			graphicsspec_path = os.path.join(graphicsspec_dir, mGraphicsSpecId + ".dat")
+			for file in os.listdir(graphicsspec_dir):
+				if mGraphicsSpecId in file:
+					graphicsspec_path = os.path.join(graphicsspec_dir, file)
+					break
+			
+			if "Skeleton" in collections_types:
+				pass
+			else:
+				_, _, _, mSkeletonId, _ = read_graphicsspec_hp(graphicsspec_path, resource_version)
+				skeleton_path = os.path.join(skeleton_dir, mSkeletonId + ".dat")
+				Skeleton = []
+				if os.path.isfile(skeleton_path) == True:
+					Skeleton = read_skeleton_hp(skeleton_path, resource_version)
+				
+				if len(Skeleton) > 0:
+					skeleton_collection = bpy.data.collections.new(vehicle_number + "_Skeleton")
+					skeleton_collection["resource_type"] = "Skeleton"
+					skeleton_collection["SkeletonID"] = mSkeletonId
+					main_collection["SkeletonID"] = mSkeletonId
+					skeleton_collection.color_tag = "COLOR_07"
+					main_collection.children.link(skeleton_collection)
+					
+					character_name = 0
+					for i, sensor in enumerate(Skeleton):
+						sensor_index, mSensorPosition, mSensorRotation, parent_sensor, relative_sensor, child_sensor, sensor_hash = sensor
+						
+						if resource_type == "GraphicsSpec":
+							sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, int(vehicle_number))
+						elif resource_type == "CharacterSpec":
+							sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, character_name)
+						sensor_empty = bpy.data.objects.new(sensor_empty_name, None)
+						if resource_type == "GraphicsSpec":
+							sensor_empty.empty_display_type = 'SPHERE'
+							sensor_empty.empty_display_size = 0.025
+							sensor_empty.show_name = True
+							sensor_empty.show_in_front = True
+						elif resource_type == "CharacterSpec":
+							sensor_empty.empty_display_type = 'SPHERE'
+							sensor_empty.empty_display_size = 0.025
+							sensor_empty.show_name = False
+							sensor_empty.show_in_front = True
+						skeleton_collection.objects.link(sensor_empty)
+						
+						sensor_empty["parent_sensor"] = parent_sensor
+						sensor_empty["correlated_sensor"] = relative_sensor
+						sensor_empty["child_sensor"] = child_sensor
+						sensor_empty["sensor_hash"] = int_to_id(sensor_hash)
+						
+						mTransform = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [*mSensorPosition, 1.0]]).transposed()
+						sensor_empty.matrix_world = m @ mTransform
+			
+			if "Effects" in collections_types:
+				pass
+			elif "Effect" in collections_types:
+				pass
+			else:
+				## Loading effects from vehicle file
+				instances_effects = read_effects_graphicsspec_hp(graphicsspec_path, resource_version)
+				
+				# Creating effects object
+				# Creating collection
+				effects_collection = bpy.data.collections.new(vehicle_number + "_Effects")
+				effects_collection["resource_type"] = "Effects"
+				effects_collection.color_tag = "COLOR_05"
+				main_collection.children.link(effects_collection)
+				
+				# Creating effect object
+				for effect_instance in instances_effects:
+					EffectId, i, effectsLocation, EffectData = effect_instance
+					
+					effect_object_name = "Effect_%d.%s" % (i, vehicle_number)
+					effect_empty = bpy.data.objects.new(effect_object_name, None)
+					effects_collection.objects.link(effect_empty)
+					
+					effect_empty['EffectId'] = EffectId
+					#effect_empty['EffectData'] = EffectData
+					
+					effect_empty.matrix_world = m @ effect_empty.matrix_world
+					
+					for j, effectLocation in enumerate(effectsLocation):
+						effect_object_name2 = "Effect_%d_copy_%d.%s" % (i, j, vehicle_number)
+						effect_empty2 = bpy.data.objects.new(effect_object_name2, None)
+						effect_empty2.parent = effect_empty
+						
+						mLocatorMatrix = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [*effectLocation[0], 1.0]]).transposed()
+						effect_empty2.matrix_world = m @ mLocatorMatrix
+						effect_empty2.rotation_mode = 'QUATERNION'
+						effect_empty2.rotation_quaternion = [effectLocation[1][3], effectLocation[1][0], effectLocation[1][1], effectLocation[1][2]]
+						
+						effect_empty2.empty_display_type = 'SINGLE_ARROW'
+						effect_empty2.empty_display_size = 0.5
+						
+						if EffectData != []:
+							effect_empty2['sensor_hash'] = int_to_id(EffectData[j])
+						
+						effects_collection.objects.link(effect_empty2)
+			
+			if "Character" in collections_types:
+				pass
+			elif "Driver" in collections_types:
+				pass
+			else:
+				genesysinstance_path = os.path.join(genesyinstance_dir, mGraphicsSpecId + ".dat")
+				instances_character = read_genesysinstance_driver(genesyinstance_dir, genesysinstance_path, resource_version)
+				
+				## Creating driver object
+				# Creating collection
+				character_collection = bpy.data.collections.new(vehicle_number + "_Driver")
+				character_collection["resource_type"] = "Character"
+				character_collection.color_tag = "COLOR_06"
+				main_collection.children.link(character_collection)
+				
+				# Creating driver object
+				mCharacterSpecID, characterOffset = instances_character
+				
+				driver_object_name = "%s_Driver" % (vehicle_number)
+				driver_empty = bpy.data.objects.new(driver_object_name, None)
+				#driver_empty["CharacterSpecID"] = mCharacterSpecID
+				character_collection.objects.link(driver_empty)
+				
+				if os.path.isfile(characterLibrary) == True:
+					#if mCharacterSpecID == "":
+					#	mCharacterSpecID = 30813
+					
+					with bpy.data.libraries.load(characterLibrary, link=False) as (data_from, data_to):
+						data_to.collections = [col for col in data_from.collections if col.startswith(str(mCharacterSpecID))]
+						if data_to.collections == []:
+							data_to.collections = [[col for col in data_from.collections if col.endswith("Character")][0]]
+					
+					for library_collection in data_to.collections:
+						driver_objects = library_collection.objects
+						for driver_object in driver_objects:
+							for child in driver_object.children:
+								if child["renderable_index"] == 0:
+									child.parent = driver_empty
+									character_collection.objects.link(child)
+									break
+				
+				mLocatorMatrix = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [*characterOffset, 1.0]]).transposed()
+				
+				driver_empty.matrix_world = m @ mLocatorMatrix
+	
+	return {'FINISHED'}
+
+
+def read_genesysinstance_driver(genesyinstance_dir, genesysinstance_path, resource_version):
+	instance_character = []
+	with open(genesysinstance_path, "rb") as f:
+		if resource_version == "NFSHPR_PC":
+			f.seek(0x30, 0)
+		elif resource_version == "NFSHP_PC":
+			f.seek(0x20, 0)
+		characterOffset = list(struct.unpack("<fff", f.read(0xC)))
+		
+		mCharacterSpecID = ""
+
+		instance_character = [mCharacterSpecID, characterOffset]
+	
+	return instance_character
+
+
+def read_effects_graphicsspec_hp(graphicsspec_path, resource_version):
+	if resource_version == "NFSHPR_PC":
+		data_format = ("<Q", 0x8)
+		effect_data_length = 0x18
+	elif resource_version == "NFSHP_PC":
+		data_format = ("<I", 0x4)
+		effect_data_length = 0xC
+	
+	instances = []
+	instances_wheel = []
+	instances_effects = []
+	mControlMeshId = ""
+	with open(graphicsspec_path, "rb") as f:
+		if resource_version == "NFSHPR_PC":
+			f.seek(0x30, 0)
+		elif resource_version == "NFSHP_PC":
+			f.seek(0x1C, 0)
+		num_effects = struct.unpack("<I", f.read(0x4))[0]
+		if resource_version == "NFSHPR_PC":
+			unknown_0x34 = struct.unpack("<I", f.read(0x4))[0]		#new null
+		mpEffectsId = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		mpEffectsTable = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		
+		f.seek(mpEffectsId, 0)
+		mEffectsId = struct.unpack("<%dI" % num_effects, f.read(0x4*num_effects))
+		
+		f.seek(mpEffectsTable, 0)
+		for i in range(0, num_effects):
+			f.seek(mpEffectsTable + effect_data_length*i, 0)
+			effect_count = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+			effect_pointer = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+			unknown_pointer = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+			
+			effectsLocation = []
+			EffectData = []
+			for j in range(0, effect_count):
+				f.seek(effect_pointer + 0x20*j, 0)
+				effectRotation = struct.unpack("<ffff", f.read(0x10))
+				effectLocation = struct.unpack("<fff", f.read(0xC))
+				padding = f.read(0x4)
+				effectsLocation.append([effectLocation, effectRotation])
+				
+				if unknown_pointer != 0:
+					f.seek(unknown_pointer + 0x4*j, 0)
+					effect_data = struct.unpack("<I", f.read(0x4))[0]
+					EffectData.append(effect_data)
+			
+			instances_effects.append([mEffectsId[i], i, effectsLocation[:], EffectData[:]])
+	
+	return instances_effects
+
+
+def read_graphicsspec_mw(graphicsspec_path):
+	instances = []
+	instances_wheel = []
+	instances_effects = []
+	with open(graphicsspec_path, "rb") as f:
+		mppModels = struct.unpack("<I", f.read(0x4))[0]
+		null_0x4 = struct.unpack("<I", f.read(0x4))[0]
+		null_0x8 = struct.unpack("<I", f.read(0x4))[0]
+		mpWheelsData = struct.unpack("<I", f.read(0x4))[0]
+		muPartsCount = struct.unpack("<B", f.read(0x1))[0]
+		unknown_0x11 = struct.unpack("<B", f.read(0x1))[0]
+		unknown_0x12 = struct.unpack("<B", f.read(0x1))[0]
+		unknown_0x13 = struct.unpack("<B", f.read(0x1))[0]
+		num_behaviours = struct.unpack("<I", f.read(0x4))[0]
+		mppBehaviour = struct.unpack("<I", f.read(0x4))[0]
+		num_effects = struct.unpack("<I", f.read(0x4))[0]
+		mpEffectsId = struct.unpack("<I", f.read(0x4))[0]
+		mpEffectsTable = struct.unpack("<I", f.read(0x4))[0]
+		padding = f.read(0x8)
+		padding = f.read(0x10)
+		
+		f.seek(mpWheelsData, 0)
+		mpWheelAllocateSpace = []
+		mNumWheelParts = []
+		object_placements = []
+		wheel_transforms = []
+		is_spinnables = []
+		for i in range(0, 4):
+			mWheelOffset = list(struct.unpack("<4f", f.read(0x10)))
+			mWheelRotation = struct.unpack("<4f", f.read(0x10))
+			mWheelScale = struct.unpack("<4f", f.read(0x10))
+			null = f.read(0x48)		# reserved for IDs
+			mpWheelAllocateSpace.append(struct.unpack("<I", f.read(0x4))[0])
+			spinnable_models = struct.unpack("<B", f.read(0x1))[0]
+			padding = f.read(0x3)
+			mNumWheelParts.append(struct.unpack("<B", f.read(0x1))[0])
+			unknown_0x81 = struct.unpack("<B", f.read(0x1))[0]
+			object_placement = f.read(0xE).split(b'\x00')[0]
+			object_placement = str(object_placement, 'ascii').lower()
+			object_placements.append(object_placement)
+			
+			wheel_transforms.append([mWheelOffset, mWheelRotation, mWheelScale])
+			is_spinnables.append(bin(spinnable_models)[2:].zfill(0x8))
+		
+		first_wheel_pointer = min(mpWheelAllocateSpace)
+		last_wheel_pointer = max(mpWheelAllocateSpace)
+		last_wheel_index = mpWheelAllocateSpace.index(last_wheel_pointer)
+		
+		f.seek(mppBehaviour, 0)
+		for i in range(0, num_behaviours):
+			null_0x0 = struct.unpack("<I", f.read(0x4))[0]
+			unknown_0x4 = struct.unpack("<I", f.read(0x4))[0]
+			mBehaviourId = struct.unpack("<I", f.read(0x4))[0]
+			unknown_0xC = struct.unpack("<I", f.read(0x4))[0]
+			unknown_0x10 = struct.unpack("<I", f.read(0x4))[0]
+		
+		f.seek(mpEffectsId, 0)
+		mEffectsId = struct.unpack("<%dI" % num_effects, f.read(0x4*num_effects))
+		
+		f.seek(mpEffectsTable, 0)
+		for i in range(0, num_effects):
+			f.seek(mpEffectsTable + 0xC*i, 0)
+			effect_count = struct.unpack("<i", f.read(0x4))[0]
+			effect_pointer = struct.unpack("<i", f.read(0x4))[0]
+			unknown_pointer = struct.unpack("<i", f.read(0x4))[0]
+			
+			effectsLocation = []
+			EffectData = []
+			for j in range(0, effect_count):
+				f.seek(effect_pointer + 0x20*j, 0)
+				effectRotation = struct.unpack("<ffff", f.read(0x10))
+				effectLocation = struct.unpack("<fff", f.read(0xC))
+				padding = f.read(0x4)
+				effectsLocation.append([effectLocation, effectRotation])
+				
+				if unknown_pointer != 0:
+					f.seek(unknown_pointer + 0x4*j, 0)
+					effect_data = struct.unpack("<I", f.read(0x4))[0]
+					EffectData.append(effect_data)
+			
+			instances_effects.append([mEffectsId[i], i, effectsLocation[:], EffectData[:]])
+		
+		#mpResourceIds = first_wheel_pointer + sum(mNumWheelParts)*0x4
+		mpResourceIds = last_wheel_pointer + mNumWheelParts[last_wheel_index]*0x4
+		mpResourceIds += calculate_padding(mpResourceIds, 0x10)
+		if mppModels >= first_wheel_pointer:
+			mpResourceIds += muPartsCount*0x4
+			mpResourceIds += calculate_padding(mpResourceIds, 0x10)
+		
+		f.seek(mpResourceIds, 0)
+		mSkeletonId = bytes_to_id(f.read(0x4))
+		_ = struct.unpack("<i", f.read(0x4))[0]
+		muOffset = struct.unpack("<I", f.read(0x4))[0]
+		padding = struct.unpack("<i", f.read(0x4))[0]
+		if muOffset == 0x8:
+			mPolygonSoupListId = mSkeletonId
+			mSkeletonId = ""
+			f.seek(-0x10, 1)
+		elif muOffset > 0x8:
+			mSkeletonId = ""
+			f.seek(-0x10, 1)
+		
+		mPolygonSoupListId = bytes_to_id(f.read(0x4))
+		_ = struct.unpack("<i", f.read(0x4))[0]
+		muOffset = struct.unpack("<I", f.read(0x4))[0]
+		padding = struct.unpack("<i", f.read(0x4))[0]
+		if muOffset > 0x8:
+			mPolygonSoupListId = ""
+			f.seek(-0x10, 1)
+		
+		for i in range(0, muPartsCount):
+			mModelId = bytes_to_id(f.read(0x4))
+			_ = struct.unpack("<i", f.read(0x4))[0]
+			muOffset = struct.unpack("<I", f.read(0x4))[0]
+			padding = struct.unpack("<i", f.read(0x4))[0]
+
+			instances.append([mModelId])
+		
+		f.seek(-0x10 * sum(mNumWheelParts), 2)
+		for i in range(0, 4):
+			for j in range(0, mNumWheelParts[i]):
+				mModelId = bytes_to_id(f.read(0x4))
+				_ = struct.unpack("<i", f.read(0x4))[0]
+				muOffset = struct.unpack("<I", f.read(0x4))[0]
+				padding = struct.unpack("<i", f.read(0x4))[0]
+				
+				is_spinnable = bool(int(is_spinnables[i][-1-j]))
+				placement = object_placements[i]
+				
+				instances_wheel.append([mModelId, [placement, is_spinnable, wheel_transforms[i]]])
+	
+	return (instances, instances_wheel, instances_effects, mSkeletonId, mPolygonSoupListId)
+
+
+def read_graphicsspec_hp(graphicsspec_path, resource_version):
+	if resource_version == "NFSHPR_PC":
+		data_format = ("<Q", 0x8)
+		effect_data_length = 0x18
+	elif resource_version == "NFSHP_PC":
+		data_format = ("<I", 0x4)
+		effect_data_length = 0xC
+	
+	instances = []
+	instances_wheel = []
+	instances_effects = []
+	mControlMeshId = ""
+	with open(graphicsspec_path, "rb") as f:
+		mppModels = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		null_0x8 = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		null_0x10 = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		mpWheelsData = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		muPartsCount = struct.unpack("<H", f.read(0x2))[0]
+		unknown_0x12 = struct.unpack("<B", f.read(0x1))[0]
+		unknown_0x13 = struct.unpack("<B", f.read(0x1))[0]
+		num_behaviours = struct.unpack("<I", f.read(0x4))[0]
+		mppBehaviour = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		num_effects = struct.unpack("<I", f.read(0x4))[0]
+		if resource_version == "NFSHPR_PC":
+			unknown_0x34 = struct.unpack("<I", f.read(0x4))[0]		#new null
+		mpEffectsId = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		mpEffectsTable = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		padding = f.read(0x8)
+		padding = f.read(0x10)
+		
+		f.seek(mpWheelsData, 0)
+		mpWheelAllocateSpace = []
+		mNumWheelParts = []
+		object_placements = []
+		wheel_transforms = []
+		is_spinnables = []
+		for i in range(0, 4):
+			mpWheelAllocateSpace.append(struct.unpack(data_format[0], f.read(data_format[1]))[0])
+			spinnable_models = struct.unpack("<I", f.read(0x4))[0]			
+			mNumWheelParts.append(struct.unpack("<H", f.read(0x2))[0])
+			padding = f.read(0x2)
+			object_placement = f.read(0x10).split(b'\x00')[0]
+			object_placement = str(object_placement, 'ascii').lower()
+			object_placements.append(object_placement)
+			if resource_version == "NFSHPR_PC":
+				null = f.read(0x10)
+			elif resource_version == "NFSHP_PC":
+				null = f.read(0x4)
+			mWheelOffset = list(struct.unpack("<4f", f.read(0x10)))
+			mWheelRotation = struct.unpack("<4f", f.read(0x10))
+			mWheelScale = struct.unpack("<4f", f.read(0x10))
+			
+			
+			wheel_transforms.append([mWheelOffset, mWheelRotation, mWheelScale])
+			is_spinnables.append(bin(spinnable_models)[2:].zfill(0x8))
+		
+		first_wheel_pointer = min(mpWheelAllocateSpace)
+		last_wheel_pointer = max(mpWheelAllocateSpace)
+		last_wheel_index = mpWheelAllocateSpace.index(last_wheel_pointer)
+		
+		f.seek(mppBehaviour, 0)
+		for i in range(0, num_behaviours):
+			null_0x0 = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+			unknown_0x8 = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+			mBehaviourId = struct.unpack("<I", f.read(0x4))[0]
+			unknown_0x14 = struct.unpack("<I", f.read(0x4))[0]
+			unknown_0x18 = struct.unpack("<I", f.read(0x4))[0]
+			if resource_version == "NFSHPR_PC":
+				padding = struct.unpack("<I", f.read(0x4))[0]
+		
+		f.seek(mpEffectsId, 0)
+		mEffectsId = struct.unpack("<%dI" % num_effects, f.read(0x4*num_effects))
+		
+		f.seek(mpEffectsTable, 0)
+		for i in range(0, num_effects):
+			f.seek(mpEffectsTable + effect_data_length*i, 0)
+			effect_count = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+			effect_pointer = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+			unknown_pointer = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+			
+			effectsLocation = []
+			EffectData = []
+			for j in range(0, effect_count):
+				f.seek(effect_pointer + 0x20*j, 0)
+				effectRotation = struct.unpack("<ffff", f.read(0x10))
+				effectLocation = struct.unpack("<fff", f.read(0xC))
+				padding = f.read(0x4)
+				effectsLocation.append([effectLocation, effectRotation])
+				
+				if unknown_pointer != 0:
+					f.seek(unknown_pointer + 0x4*j, 0)
+					effect_data = struct.unpack("<I", f.read(0x4))[0]
+					EffectData.append(effect_data)
+			
+			instances_effects.append([mEffectsId[i], i, effectsLocation[:], EffectData[:]])
+		
+		#mpResourceIds = first_wheel_pointer + sum(mNumWheelParts)*0x4
+		mpResourceIds = last_wheel_pointer + mNumWheelParts[last_wheel_index]*data_format[1]
+		mpResourceIds += calculate_padding(mpResourceIds, 0x10)
+		if mppModels >= first_wheel_pointer:
+			mpResourceIds += muPartsCount*data_format[1]
+			mpResourceIds += calculate_padding(mpResourceIds, 0x10)
+		
+		f.seek(mpResourceIds, 0)
+		mSkeletonId = bytes_to_id(f.read(0x4))
+		_ = struct.unpack("<i", f.read(0x4))[0]
+		muOffset = struct.unpack("<I", f.read(0x4))[0]
+		padding = struct.unpack("<i", f.read(0x4))[0]
+		if (muOffset == 0x10 and resource_version == "NFSHPR_PC") or (muOffset == 0x8 and resource_version == "NFSHP_PC"):
+			#mControlMeshId = mSkeletonId
+			mControlMeshId = mSkeletonId
+			mSkeletonId = ""
+			f.seek(-0x10, 1)
+		elif muOffset > 0x10:
+			mSkeletonId = ""
+			f.seek(-0x10, 1)
+		
+		mControlMeshId = bytes_to_id(f.read(0x4))
+		_ = struct.unpack("<i", f.read(0x4))[0]
+		muOffset = struct.unpack("<I", f.read(0x4))[0]
+		padding = struct.unpack("<i", f.read(0x4))[0]
+		if muOffset > 0x10:
+			mControlMeshId = ""
+			f.seek(-0x10, 1)
+		
+		for i in range(0, muPartsCount):
+			mModelId = bytes_to_id(f.read(0x4))
+			_ = struct.unpack("<i", f.read(0x4))[0]
+			muOffset = struct.unpack("<I", f.read(0x4))[0]
+			padding = struct.unpack("<i", f.read(0x4))[0]
+
+			instances.append([mModelId])
+		
+		f.seek(-0x10 * sum(mNumWheelParts), 2)
+		for i in range(0, 4):
+			for j in range(0, mNumWheelParts[i]):
+				mModelId = bytes_to_id(f.read(0x4))
+				_ = struct.unpack("<i", f.read(0x4))[0]
+				muOffset = struct.unpack("<I", f.read(0x4))[0]
+				padding = struct.unpack("<i", f.read(0x4))[0]
+				
+				is_spinnable = bool(int(is_spinnables[i][-1-j]))
+				placement = object_placements[i]
+				
+				instances_wheel.append([mModelId, [placement, is_spinnable, wheel_transforms[i]]])
+	
+	return (instances, instances_wheel, instances_effects, mSkeletonId, mControlMeshId)
+
+
+def read_skeleton_mw(skeleton_path):
+	Skeleton = []
+	with open(skeleton_path, "rb") as f:
+		unk = struct.unpack("<H", f.read(0x2))[0]
+		muCount = struct.unpack("<H", f.read(0x2))[0]
+		mppPointer = struct.unpack("<I", f.read(0x4))[0]
+		mppPointer2 = struct.unpack("<I", f.read(0x4))[0]
+		mppPointer3 = struct.unpack("<I", f.read(0x4))[0]
+		
+		f.seek(mppPointer, 0)
+		for i in range(0, muCount):
+			f.seek(mppPointer + 0x30*i, 0)
+			location = struct.unpack("<fff", f.read(0xC))
+			padding = f.read(0x4)
+			rotation = struct.unpack("<ffff", f.read(0x10))
+			parent_sensor = struct.unpack("<i", f.read(0x4))[0]
+			relative_sensor = struct.unpack("<i", f.read(0x4))[0]
+			child_sensor = struct.unpack("<i", f.read(0x4))[0]
+			sensor_index = struct.unpack("<i", f.read(0x4))[0]
+			
+			Skeleton.append([sensor_index, location, rotation, parent_sensor, relative_sensor, child_sensor])
+		
+		f.seek(mppPointer3, 0)
+		for i in range(0, muCount):
+			hash = struct.unpack("<I", f.read(0x4))[0]
+			Skeleton[i].append(hash)
+	
+	return Skeleton
+
+
+def read_skeleton_hp(skeleton_path, resource_version):
+	if resource_version == "NFSHPR_PC":
+		data_format = ("<Q", 0x8)
+	elif resource_version == "NFSHP_PC":
+		data_format = ("<I", 0x4)
+	
+	Skeleton = []
+	with open(skeleton_path, "rb") as f:
+		mppPointer = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		mppPointer2 = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		mppPointer3 = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		muCount = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		
+		f.seek(mppPointer, 0)
+		for i in range(0, muCount):
+			f.seek(mppPointer + 0x20*i, 0)
+			location = struct.unpack("<fff", f.read(0xC))
+			padding = f.read(0x4)
+			rotation = []
+			parent_sensor = struct.unpack("<i", f.read(0x4))[0]
+			relative_sensor = struct.unpack("<i", f.read(0x4))[0]
+			child_sensor = struct.unpack("<i", f.read(0x4))[0]
+			sensor_index = struct.unpack("<i", f.read(0x4))[0]
+			
+			Skeleton.append([sensor_index, location, rotation, parent_sensor, relative_sensor, child_sensor])
+		
+		f.seek(mppPointer3, 0)
+		for i in range(0, muCount):
+			hash = struct.unpack("<I", f.read(0x4))[0]
+			Skeleton[i].append(hash)
+	
+	return Skeleton
 
 
 def read_shader(shader_path):
@@ -459,7 +1192,7 @@ def read_shader(shader_path):
 	return (shader_description, raster_types_dict, num_material_states, material_constants, muNumVertexShaderConstantsInstances, mafVertexShaderConstantsInstanceData, mauVertexShaderNamesHash, muNumPixelShaderConstantsInstances, mafPixelShaderConstantsInstanceData, mauPixelShaderNamesHash)
 
 
-def read_shader_mw(shader_path):	#ok
+def read_shader_mw(shader_path):
 	ShaderType = ""
 	raster_types = []
 	with open(shader_path, "rb") as f:
@@ -561,6 +1294,143 @@ def read_shader_mw(shader_path):	#ok
 		raster_types_dict = {}
 		for raster_type_data in raster_types:
 			raster_types_dict[raster_type_data[0]] = raster_type_data[1]
+		
+		# VertexDescriptor
+		f.seek(resources_pointer, 0)
+		mVertexDescriptorId = bytes_to_id(f.read(0x4))
+	
+	return (shader_description, mVertexDescriptorId, miNumSamplers, raster_types_dict, shader_parameters, material_constants)
+
+
+def read_shader_hp(shader_path, resource_version):
+	if resource_version == "NFSHPR_PC":
+		data_format = ("<Q", 0x8)
+	elif resource_version == "NFSHP_PC":
+		data_format = ("<I", 0x4)
+	
+	ShaderType = ""
+	raster_types = []
+	texture_samplers = []
+	with open(shader_path, "rb") as f:
+		file_size = os.path.getsize(shader_path)
+		
+		# Shader description
+		pointer_0 = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		pointer_1 = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		shader_description_offset = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		f.seek(0x4, 1)
+		end_sampler_types_offset = struct.unpack("<H", f.read(0x2))[0]
+		resources_pointer = struct.unpack("<H", f.read(0x2))[0]
+		shader_parameters_pointers = f.tell()
+		f.seek(shader_description_offset, 0)
+		shader_description = f.read(resources_pointer-shader_description_offset).split(b'\x00')[0]
+		shader_description = str(shader_description, 'ascii')
+		
+		# Shader parameters
+		f.seek(shader_parameters_pointers, 0)
+		shader_parameters_indices_pointer = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		shader_parameters_ones_pointer = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		shader_parameters_nameshash_pointer = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		shader_parameters_data_pointer = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		num_shader_parameters = struct.unpack("<B", f.read(0x1))[0]
+		num_shader_parameters_withdata = struct.unpack("<B", f.read(0x1))[0]
+		f.seek(0x2, 1)
+		if resource_version == "NFSHPR_PC":
+			f.seek(0x4, 1)
+		shader_parameters_names_pointer = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		shader_parameters_end_pointer = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		if shader_parameters_end_pointer == 0:
+			shader_parameters_end_pointer = end_sampler_types_offset
+		
+		f.seek(shader_parameters_indices_pointer, 0)
+		shader_parameters_Indices = list(struct.unpack("<%db" % num_shader_parameters, f.read(0x1*num_shader_parameters)))
+		
+		f.seek(shader_parameters_ones_pointer, 0)
+		shader_parameters_Ones = list(struct.unpack("<%db" % num_shader_parameters, f.read(0x1*num_shader_parameters)))
+		
+		f.seek(shader_parameters_nameshash_pointer, 0)
+		shader_parameters_NamesHash = list(struct.unpack("<%dI" % num_shader_parameters, f.read(0x4*num_shader_parameters)))
+		
+		f.seek(shader_parameters_data_pointer, 0)
+		shader_parameters_Data = []
+		# for i in range(0, num_shader_parameters):
+			# if shader_parameters_Indices[i] == -1:
+				# shader_parameters_Data.append(None)
+			# else:
+				# shader_parameters_Data.append(struct.unpack("<4f", f.read(0x10)))
+		
+		for i in range(0, num_shader_parameters):
+			if shader_parameters_Indices[i] == -1:
+				shader_parameters_Data.append(None)
+			else:
+				f.seek(shader_parameters_data_pointer + 0x10*shader_parameters_Indices[i], 0)
+				shader_parameters_Data.append(struct.unpack("<4f", f.read(0x10)))
+				#parameters_names.append(shader_parameters_Names[i])
+		
+		shader_parameters_Names = []
+		#shader_parameters_Names = [""]*num_shader_parameters
+		for i in range(0, num_shader_parameters):
+			f.seek(shader_parameters_names_pointer + i*data_format[1], 0)
+			pointer = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+			f.seek(pointer, 0)
+			parameter_name = f.read(shader_parameters_end_pointer-pointer).split(b'\x00')[0]
+			parameter_name = str(parameter_name, 'ascii')
+			shader_parameters_Names.append(parameter_name)
+			#shader_parameters_Names[shader_parameters_Indices[i]] = parameter_name
+		
+		shader_parameters = [shader_parameters_Indices, shader_parameters_Ones, shader_parameters_NamesHash, shader_parameters_Data, shader_parameters_Names]
+		
+		# Samplers and material constants
+		if resource_version == "NFSHPR_PC":
+			f.seek(0xB0, 0)
+		elif resource_version == "NFSHP_PC":
+			f.seek(0x5C, 0)
+		miNumSamplers = struct.unpack("<B", f.read(0x1))[0]
+		f.seek(0x3, 1)
+		if resource_version == "NFSHPR_PC":
+			f.seek(0x4, 1)
+		mpaMaterialConstants = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		mpaSamplersChannel = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		mpaSamplers = struct.unpack(data_format[0], f.read(data_format[1]))[0]
+		if resource_version == "NFSHPR_PC":
+			f.seek(0xF8, 0)
+		elif resource_version == "NFSHP_PC":
+			f.seek(0x80, 0)
+		end_raster_types_offset = struct.unpack("<i", f.read(0x4))[0]
+		if end_raster_types_offset == 0:
+			end_raster_types_offset = end_sampler_types_offset
+		
+		f.seek(mpaMaterialConstants, 0)
+		material_constants = struct.unpack("<%dH" % miNumSamplers, f.read(0x2*miNumSamplers))
+		
+		f.seek(mpaSamplersChannel, 0)
+		miChannel = struct.unpack("<%dB" % miNumSamplers, f.read(0x1*miNumSamplers))
+		
+		f.seek(mpaSamplers, 0)
+		if resource_version == "NFSHPR_PC":
+			raster_type_offsets = list(struct.unpack("<%dQ" % miNumSamplers, f.read(0x8*miNumSamplers)))
+		elif resource_version == "NFSHP_PC":
+			raster_type_offsets = list(struct.unpack("<%dI" % miNumSamplers, f.read(0x4*miNumSamplers)))
+		raster_type_offsets.append(end_raster_types_offset)
+		
+		for i in range(0, miNumSamplers):
+			f.seek(raster_type_offsets[i], 0)
+			if raster_type_offsets[i] > raster_type_offsets[i+1]:
+				raster_type = f.read(end_raster_types_offset-raster_type_offsets[i]).split(b'\x00')[0]
+			else:
+				raster_type = f.read(raster_type_offsets[i+1]-raster_type_offsets[i]).split(b'\x00')[0]
+			raster_type = str(raster_type, 'ascii')
+			raster_types.append([miChannel[i], raster_type])
+			texture_samplers.append(raster_type)
+		
+		raster_types.sort(key=lambda x:x[0])
+		
+		raster_types_dict = {}
+		for raster_type_data in raster_types:
+			raster_types_dict[raster_type_data[0]] = raster_type_data[1]
+		
+		if shader_description == "DEBUG_TRIGGER_Illuminance_Greyscale_Singlesided":
+			texture_samplers.insert(-1, "IlluminanceTextureSampler")
 		
 		# VertexDescriptor
 		f.seek(resources_pointer, 0)
@@ -686,7 +1556,7 @@ def get_mShaderID(shader_description, resource_type):
 	return (mShaderId, shader_description)
 
 
-def get_mShaderID_mw(shader_description, resource_type):	#ok
+def get_mShaderID_mw(shader_description, resource_type):
 	shaders = {	'WorldPBR_Horizontal_VertexLit_Normal_Reflective_AO_Singlesided': '00_87_0F_00',
 				'World_UVScrolling_Specular_Illuminance_Singlesided': '02_87_0F_00',
 				'Blit2d_ViewGBufferSpecular': '02_E0_05_00',
@@ -1063,7 +1933,7 @@ def get_mShaderID_mw(shader_description, resource_type):	#ok
 	
 	# Adding custom shaders
 	try:
-		shaders.update(custom_shaders())
+		shaders.update(custom_shaders_mw())
 	except:
 		print("WARNING: custom_shaders function not found. Custom data will not be available.")
 		shaders['Glass'] = 'A9_EF_09_00' #before it was A7_EF_09_00
@@ -1183,7 +2053,309 @@ def get_mShaderID_mw(shader_description, resource_type):	#ok
 	return (mShaderId, shader_description)
 
 
-def get_default_material_parameters(shader_type):
+def get_mShaderID_hp(shader_description, resource_type):
+	shaders = {	'UIMapShader': '00_2F_0C_00',
+				'UIFlameShaderNonAdditive': '01_66_0B_00',
+				'World_Diffuse_Dirt_Normal_Specular_Overlay_Singlesided': '02_E8_12_00',
+				'Vehicle_1Bit_Textured_NormalMapped_Emissive_AO_Livery': '06_35_03_00',
+				'VfxMesh': '06_93_03_00',
+				'World_Diffuse_Specular_Normal_Parallax_Singlesided': '06_E8_12_00',
+				'Deflicker_World_Diffuse_Normal_Specular_Singlesided': '08_E8_12_00',
+				'Deflicker_World_Diffuse_Normal_Specular_Overlay_Singlesided': '0A_E8_12_00',
+				'World_Diffuse_Reflective_Overlay_Lightmap_Singlesided': '0B_6C_07_00',
+				'Deflicker_World_Diffuse_Normal_Specular_Overlay_IlluminanceNight_Singlesided': '0C_E8_12_00',
+				'Deflicker_World_Diffuse_Normal_Specular_Overlay_Illuminance_Singlesided': '0E_E8_12_00',
+				'World_Diffuse_Specular_Overlay_IlluminanceNight_1Bit_Singlesided': '10_1A_09_00',
+				'Vehicle_Opaque_Two_PaintGloss_Textured_LightmappedLights_Livery_Wrap': '10_AF_13_00',
+				'World_DiffuseBlend_Normal_Overlay_Lightmap_Singlesided': '12_1A_09_00',
+				'Vehicle_Opaque_PaintGloss_Textured_LightmappedLights_ColourOverride_Wrap': '12_AF_13_00',
+				'World_Diffuse_Specular_Singlesided': '13_2F_06_00',
+				'World_Diffuse_1Bit_Dirt_Normal_Specular_Overlay_Singlesided': '13_E8_12_00',
+				'World_Diffuse_Specular_1Bit_Lightmap_Doublesided': '14_1A_09_00',
+				'Vehicle_Glass_Emissive_Coloured_Singlesided_Wrap': '14_AF_13_00',
+				'Cable_GreyScale_Doublesided': '15_14_00_00',
+				'Vehicle_Opaque_Emissive_AO': '19_D4_03_00',
+				'SSAO': '19_E8_12_00',
+				'Vehicle_Opaque_Emissive_Reflective_AO': '1B_D4_03_00',
+				'World_Normal_Specular_Overlay_Singlesided': '1C_31_06_00',
+				'TextBoldShader': '1C_8C_04_00',
+				'World_Diffuse_Specular_Parallax_Singlesided': '1D_2F_06_00',
+				'Blur': '1D_E8_12_00',
+				'TriggerShader': '1E_67_03_00',
+				'Flag_Opaque_Doublesided': '1F_1A_09_00',
+				'World_Diffuse_Specular_Overlay_Singlesided': '1F_2F_06_00',
+				'TextDropShadow': '1F_8C_04_00',
+				'LightBuffer_Cone4': '20_95_09_00',
+				'World_Diffuse_Dirt_Normal_SpecMap_Overlay_Singlesided': '20_E8_12_00',
+				'LightBuffer_KeylightAndAmbient_ProjectedShadowTexture': '21_73_03_00',
+				'VfxMeshNormalMap': '21_93_03_00',
+				'TextShader': '22_8C_04_00',
+				'LightBuffer_Point4': '22_95_09_00',
+				'VfxMeshCarPaint': '23_93_03_00',
+				'DEBUG_TRIGGER_Illuminance_Greyscale_Singlesided': '23_D0_02_00',
+				'TextBoldDropShadow': '24_8C_04_00',
+				'DriveableSurface_Car_Select': '24_E8_12_00',
+				'CatsEyes': '25_92_03_00',
+				'World_DiffuseBlend_Normal_Overlay_Singlesided': '27_6E_07_00',
+				'TextOutline': '27_8C_04_00',
+				'Vfx_CoronaBeam': '27_E8_12_00',
+				'DiffuseSpecmapNormalMap_DirtMap': '28_6C_07_00',
+				'LightBuffer_Cone3': '28_95_09_00',
+				'Tree_Translucent_1Bit_Doublesided': '29_1A_09_00',
+				'World_Diffuse_Normal_SpecMap_Singlesided': '29_E8_12_00',
+				'LightBuffer_Cone2': '2A_95_09_00',
+				'Vehicle_1Bit_Textured_NormalMapped_Reflective_Emissive_AO_Livery': '2B_58_05_00',
+				'DriveableSurface_Car_Select_Simple': '2B_E8_12_00',
+				'LightBuffer_Point3': '2D_95_09_00',
+				'World_Diffuse_Normal_SpecMap_Overlay_Singlesided': '2D_E8_12_00',
+				'Diffuse_Greyscale_Doublesided': '2E_1D_00_00',
+				'LightBuffer_Point2': '2F_95_09_00',
+				'Vehicle_Glass_Coloured_NoNormalMap': '2F_E8_12_00',
+				'Vehicle_Glass_Emissive_Coloured_NoNormalMap': '31_E8_12_00',
+				'World_DiffuseBlend_Normal_Overlay_LightmapNight_Singlesided': '33_1A_09_00',
+				'Vehicle_Glass_Emissive_Coloured_Singlesided_NoNormalMap': '33_E8_12_00',
+				'DICETerrain3_Proto': '35_0E_05_00',
+				'World_Diffuse_Specular_1Bit_LightmapNight_Doublesided': '35_1A_09_00',
+				'Vehicle_Glass_LocalEmissive_Coloured_NoNormalMap': '35_E8_12_00',
+				'Road_Proto': '36_30_02_00',
+				'World_Diffuse_Specular_Overlay_LightmapNight_Singlesided': '36_6E_07_00',
+				'LightBuffer_Cop4': '36_95_09_00',
+				'World_Normal_Specular_Overlay_LightmapNight_Singlesided': '38_6E_07_00',
+				'LightBuffer_Cop3': '38_95_09_00',
+				'World_Diffuse_Specular_Normal_Parallax_WindowTex_Singlesided': '39_E8_12_00',
+				'HidingSpot_Proto_LightmapNight': '3A_6E_07_00',
+				'LightBuffer_Cop2': '3A_95_09_00',
+				'Vehicle_Wheel_Alpha_Normalmap': '3B_58_05_00',
+				'GBufferCompositeRearViewMirror': '3C_73_03_00',
+				'LightBuffer_Cop': '3C_95_09_00',
+				'World_Diffuse_Specular_Normal_Overlay_Lightmap_Singlesided': '3C_E8_12_00',
+				'FlaptGenericShader3D': '3D_CD_03_00',
+				'World_Diffuse_Reflective_Overlay_LightmapNight_Singlesided': '3E_6E_07_00',
+				'DriveableSurface_AlphaMask_LightmapNight': '40_6E_07_00',
+				'Diffuse_Opaque_Singlesided_Skin_ObjectAO': '40_73_03_00',
+				'Vehicle_Opaque_PaintGloss_Textured_LightmappedLights_ColourOverride': '41_C6_01_00',
+				'DriveableSurface_LightmapNight': '42_6E_07_00',
+				'Diffuse_Opaque_Singlesided_ObjectAO': '42_73_03_00',
+				'Vehicle_Wheel_1Bit_Alpha_Normalmap': '43_52_04_00',
+				'BlitBilateralUpsample': '43_93_03_00',
+				'Vehicle_Glass_Coloured': '43_C6_01_00',
+				'DriveableSurface_Decal_LightmapNight': '44_6E_07_00',
+				'Diffuse_Greyscale_Doublesided_ObjectAO': '44_73_03_00',
+				'Vehicle_Wheel_1Bit_Alpha': '45_52_04_00',
+				'GBufferComposite': '45_61_04_00',
+				'Vehicle_Glass_Emissive_Coloured': '45_C6_01_00',
+				'World_CopStudio_Specular_Reflective_Singlesided': '46_0F_05_00',
+				'DriveableSurface_RetroreflectivePaint_LightmapNight': '46_6E_07_00',
+				'Diffuse_1Bit_Singlesided_ObjectAO': '46_73_03_00',
+				'VfxParticles_MotionBlurSpriteUntex': '46_92_03_00',
+				'Diffuse_1Bit_Doublesided_Skin_ObjectAO': '48_73_03_00',
+				'HelicopterRotor_GreyScale_Doublesided': '49_31_06_00',
+				'Vehicle_Opaque_Textured_Phong': '4A_62_02_00',
+				'Diffuse_1Bit_Doublesided_ObjectAO': '4A_73_03_00',
+				'LineariseDepthDownsample': '4C_E8_12_00',
+				'Vehicle_Opaque_Textured_Normalmapped_Reflective_AO': '4E_62_02_00',
+				'Vehicle_Greyscale_Textured_Normalmapped_Reflective': '50_62_02_00',
+				'Vehicle_Opaque_PaintGloss_Textured_LightmappedLights_Livery': '52_C6_01_00',
+				'DICETerrain3Cheap_Proto': '53_6B_07_00',
+				'Vehicle_Opaque_Textured_Reflective': '54_62_02_00',
+				'World_Diffuse_Specular_Overlay_IlluminanceNight_Singlesided': '55_18_09_00',
+				'LightBuffer_KeylightAndAmbient_ProjectedShadowTexture_LowQuality': '55_73_03_00',
+				'Vehicle_Opaque_Textured': '56_62_02_00',
+				'DriveableSurface_Lightmap_Car_Select': '56_C4_07_00',
+				'Vehicle_Opaque_PaintGloss_Textured_LightmappedLights_ColourOverride_Livery': '56_C6_01_00',
+				'Vehicle_Opaque_Textured_Normalmapped_AO': '58_62_02_00',
+				'Blit2d': '59_03_04_00',
+				'Diffuse_Opaque_Singlesided': '5A_17_00_00',
+				'Flag_VerticalBanner_Opaque_Doublesided': '5A_1A_09_00',
+				'DriveableSurface_RetroreflectivePaint_Lightmap_Car_Select': '5A_C4_07_00',
+				'LightBuffer_Point': '5B_C6_01_00',
+				'Foliage_1Bit_Doublesided': '5D_03_04_00',
+				'Vehicle_Opaque_Two_PaintGloss_Textured_LightmappedLights_Livery': '5D_52_04_00',
+				'LightBuffer_Cone': '5D_C6_01_00',
+				'Diffuse_1Bit_Doublesided': '5E_17_00_00',
+				'Water_Proto_Cheap': '5E_18_09_00',
+				'NewSky': '60_93_08_00',
+				'PlanarReflection_DepthBufferConversion_2d': '61_03_04_00',
+				'Illuminance_Diffuse_Opaque_Singlesided': '61_17_00_00',
+				'DiffuseSpecmapNormalMap': '61_C6_01_00',
+				'UIMovieShader': '62_8C_03_00',
+				'SeparableGaussian_2d': '63_03_04_00',
+				'World_Tourbus_Normal_Reflective_Overlay_Singlesided': '63_2D_0C_00',
+				'DriveableSurface_AlphaMask_Lightmap': '63_6B_07_00',
+				'Armco_Opaque_Doublesided': '63_7F_02_00',
+				'DriveableSurface_Lightmap': '65_6B_07_00',
+				'LightBuffer_KeylightAndAmbientNoShadow': '66_03_04_00',
+				'DriveableSurface_Decal_Lightmap': '67_6B_07_00',
+				'UIGenericDestAlphaModulateShader': '68_93_08_00',
+				'LightBuffer_KeylightAndAmbient': '68_C6_01_00',
+				'DriveableSurface_RetroreflectivePaint_Lightmap': '69_6B_07_00',
+				'UIGenericAlphaLuminanceShader': '6A_93_08_00',
+				'HidingSpot_Proto_Lightmap': '6B_6B_07_00',
+				'UIAutologShader': '6B_CD_03_00',
+				'UIMovieAdditiveShader': '6E_8C_03_00',
+				'Blit2d_GammaCorrection': '70_03_04_00',
+				'VfxParticles_DiffusePremultiplied': '70_92_03_00',
+				'Blit2d_AlphaAsColour': '73_03_04_00',
+				'Chevron': '74_1A_09_00',
+				'Bush_Translucent_1Bit_Doublesided': '74_2D_0C_00',
+				'LightBuffer_KeylightAndAmbient_SingleCSM': '76_03_04_00',
+				'VfxParticles_Diffuse_AlphaErosion': '78_FF_07_00',
+				'Blit2d_ClearGBuffer': '79_03_04_00',
+				'TextGlow': '79_8B_03_00',
+				'UIRearViewMirrorShader': '79_8C_03_00',
+				'Foliage_LargeSprites_Proto': '7B_18_09_00',
+				'GBufferCompositeNoFog': '7C_03_04_00',
+				'VfxParticles_Diffuse_AlphaErosion_SubUV': '7D_FF_07_00',
+				'LightBuffer_KeylightAndAmbient_SingleCSM_NoSpecular': '7F_03_04_00',
+				'LightBuffer_KeylightAndAmbient_NoSpecular': '81_03_04_00',
+				'Vfx_SkidMarks': '82_92_01_00',
+				'TextAdditiveShader': '83_8C_03_00',
+				'Vehicle_Glass_Emissive_Coloured_Singlesided': '84_52_04_00',
+				'Vehicle_Opaque_Textured_NormalMapped_Reflective_LocalEmissive_AO': '85_0A_0A_00',
+				'GBufferCompositeDepthWrite': '86_03_04_00',
+				'DiffuseSpecNormalMap_1Bit': '86_B5_03_00',
+				'DriveableSurface_RetroreflectivePaint_LineFade': '8A_03_04_00',
+				'Vehicle_Opaque_Textured_NormalMapped_Reflective_Emissive_AO': '8A_62_02_00',
+				'CatsEyesGeometry': '8B_93_03_00',
+				'DriveableSurface_RetroreflectivePaint_Lightmap_LineFade': '8C_03_04_00',
+				'World_Diffuse_Specular_Reflective_Singlesided': '8C_6C_07_00',
+				'Blit2d_EdgeDetect_MotionBlur': '8F_03_04_00',
+				'Diffuse_1Bit_Doublesided_Skin': '95_26_04_00',
+				'Diffuse_1Bit_Singlesided': '97_1A_00_00',
+				'Diffuse_Opaque_Singlesided_Skin': '97_26_04_00',
+				'DriveableSurface': '97_92_03_00',
+				'ChevronBlockRoad': '99_48_06_00',
+				'Foliage_Proto': '9A_0D_05_00',
+				'World_Normal_Specular_Overlay_Lightmap_Singlesided': '9B_6A_07_00',
+				'World_Diffuse_Specular_Overlay_Lightmap_Singlesided': '9D_6A_07_00',
+				'UIAdditiveOverlayShader': '9E_8C_03_00',
+				'DriveableSurface_Decal': 'A3_92_03_00',
+				'UIFlameShader': 'A3_CD_03_00',
+				'HidingSpot_Proto': 'A4_30_06_00',
+				'DriveableSurface_AlphaMask': 'A5_92_03_00',
+				'DriveableSurface_RetroreflectivePaint': 'A7_92_03_00',
+				'Water_Proto': 'AC_30_06_00',
+				'Fence_GreyScale_Doublesided': 'AF_6C_07_00',
+				'DriveableSurface_RetroreflectivePaint_LineFade_Rotated_UV': 'B0_2E_0C_00',
+				'World_Normal_Reflective_Overlay_Lightmap_Singlesided': 'B0_4E_08_00',
+				'UIAdditivePixelate': 'B5_8C_03_00',
+				'Skin_World_Diffuse_Specular_Overlay_Singlesided': 'B7_6C_07_00',
+				'Vehicle_Opaque_PaintGloss_Textured_LightmappedLights': 'B8_1E_00_00',
+				'Vehicle_Opaque_PaintGloss_Textured_LightmappedLights_Livery_Wrap': 'B8_6C_13_00',
+				'DriveableSurface_CarPark': 'BA_1B_09_00',
+				'UIMovieShaderSubOverlay': 'BA_57_0B_00',
+				'Vehicle_Opaque_PaintGloss_Textured_LightmappedLights_Wrap': 'BA_6C_13_00',
+				'UIAdditiveShader': 'BA_8B_03_00',
+				'Vehicle_Tyre': 'BB_1E_00_00',
+				'DriveableSurface_AlphaMask_CarPark': 'BC_1B_09_00',
+				'Vehicle_Wheel_Alpha_Blur_Normalmap': 'BC_1E_00_00',
+				'UIMovieShaderAddOverlay': 'BC_57_0B_00',
+				'Vehicle_Wheel_Opaque': 'BD_1E_00_00',
+				'VfxParticles_Diffuse': 'BD_92_01_00',
+				'DriveableSurface_RetroreflectivePaint_CarPark': 'BE_1B_09_00',
+				'Vehicle_Wheel_Opaque_Blur': 'BE_1E_00_00',
+				'DriveableSurface_Decal_CarPark': 'C0_1B_09_00',
+				'DriveableSurface_RetroreflectivePaint_LineFade_Rotated_UV_02': 'C0_2E_0C_00',
+				'Vfx_Corona': 'C2_92_01_00',
+				'DiffuseSpecmapNormalMap_Overlay': 'C6_30_06_00',
+				'Vfx_CoronaVisibilityTest': 'C9_92_01_00',
+				'Character_Opaque_Textured_NormalMap_SpecMap_Skin': 'CB_51_04_00',
+				'Vfx_CoronaFlare': 'CB_92_01_00',
+				'Vehicle_Wheel_Brakedisc_1Bit_Blur_Normalmap': 'CB_A9_01_00',
+				'Waterfall_Proto': 'CD_30_06_00',
+				'Vehicle_Opaque_Textured_NormalMapped_Emissive_AO': 'CD_D0_03_00',
+				'Character_Greyscale_Textured_Doublesided_Skin': 'CF_51_04_00',
+				'VfxParticles_DiffusePremultiplied_SubUV': 'CF_6E_07_00',
+				'Sign_RetroReflective': 'D2_B6_03_00',
+				'DICETerrain3NoRGB_Proto': 'D9_1B_09_00',
+				'Vehicle_Glass_Emissive_Coloured_Wrap': 'DB_6C_13_00',
+				'Fence_GreyScale_Singlesided': 'DC_0E_05_00',
+				'MapIconShader': 'DD_9A_05_00',
+				'Groundcover_Proto': 'DE_72_03_00',
+				'Skin_World_Diffuse_Specular_Reflective_Singlesided': 'DF_6C_07_00',
+				'Foliage_1Bit_Normal_Spec_Doublesided': 'DF_E7_12_00',
+				'VfxParticles_Diffure_SubUV': 'E0_FE_07_00',
+				'Bush_Translucent_1Bit_Normal_Spec_Doublesided': 'E1_E7_12_00',
+				'Deflicker_World_Diffuse_Specular_Singlesided': 'E2_0E_05_00',
+				'DICETerrain3CliffsOnly_Proto': 'E2_1B_09_00',
+				'BlobbyShadow_Greyscale_Doublesided': 'E3_13_00_00',
+				'Deflicker_World_Diffuse_Specular_Overlay_Singlesided': 'E4_0E_05_00',
+				'Foliage_Proto_Spec_Normal': 'E5_E7_12_00',
+				'Deflicker_World_Diffuse_Specular_Overlay_Illuminance_Singlesided': 'E6_0E_05_00',
+				'Vehicle_Glass_LocalEmissive_Coloured': 'E6_92_01_00',
+				'Foliage_LargeSprites_Proto_Spec_Normal': 'E7_E7_12_00',
+				'World_Diffuse_Specular_Overlay_Illuminance_Singlesided': 'E8_6A_07_00',
+				'DebugIrradiance_1Bit_Singlesided_2d': 'EA_13_00_00',
+				'World_Diffuse_Specular_Illuminance_Singlesided': 'EB_6A_07_00',
+				'Vehicle_Rearlights_Heightmap': 'EB_6E_03_00',
+				'World_DiffuseBlend_Specular_Overlay_Singlesided': 'F1_30_06_00',
+				'Vehicle_1Bit_Textured_Normalmapped_Reflective': 'F1_D3_03_00',
+				'Deflicker_World_Diffuse_Specular_Overlay_IlluminanceNight_Singlesided': 'F1_D8_0B_00',
+				'Vehicle_Opaque_Textured_NormalMapped_Reflective_Emissive_AO_Livery': 'F3_D0_03_00',
+				'Vehicle_Opaque_Reflective': 'F3_D3_03_00',
+				'LightBuffer_ProjectedTexture': 'F6_6E_03_00',
+				'DriveableSurface_RetroreflectivePaint_Lightmap_LineFade_rotatedUV': 'F9_2E_0C_00',
+				'Vehicle_Opaque_Textured_NormalMapped_Emissive_AO_Livery': 'FA_D0_03_00',
+				'DriveableSurface_RetroreflectivePaint_Lightmap_LineFade_rotatedUV_02': 'FB_2E_0C_00',
+				'Blit2d_AutomaticExposureMeter': 'FB_72_03_00',
+				'FlaptGenericShader': 'FE_27_00_00',
+				'Vehicle_Greyscale_Textured_Normalmapped': 'FE_D0_03_00',
+				'World_Diffuse_Specular_FlashingNeon_Singlesided': 'FF_0E_05_00'}
+	
+	# Adding custom shaders
+	try:
+		shaders.update(custom_shaders_hp())
+	except:
+		print("WARNING: custom_shaders function not found. Custom data will not be available.")
+	
+	try:
+		mShaderId = shaders[shader_description]
+	except:
+		mShaderId = ""
+		try:
+			from difflib import get_close_matches
+			shader_description_ = shader_description
+			close_shaders = get_close_matches(shader_description.replace("NFS13",""), shaders.keys())
+			for i in range(0, len(close_shaders)):
+				if resource_type == "InstanceList":
+					if not close_shaders[i].startswith("Vehicle"):
+						shader_description = close_shaders[i]
+						mShaderId = shaders[shader_description]
+						print("WARNING: getting similar shader type for shader %s: %s" % (shader_description_, shader_description))
+						break
+				elif resource_type == "CharacterSpec":
+					if close_shaders[i].startswith("Character"):
+						shader_description = close_shaders[i]
+						mShaderId = shaders[shader_description]
+						print("WARNING: getting similar shader type for shader %s: %s" % (shader_description_, shader_description))
+						break
+				else:
+					if close_shaders[i].startswith("Vehicle"):
+						shader_description = close_shaders[i]
+						mShaderId = shaders[shader_description]
+						print("WARNING: getting similar shader type for shader %s: %s" % (shader_description_, shader_description))
+						break
+		except:
+			mShaderId = ""
+		if mShaderId == "":
+			if resource_type == "InstanceList":
+				shader_description = 'World_Diffuse_Specular_Singlesided'
+				mShaderId = shaders[shader_description]
+			elif resource_type == "GraphicsSpec":
+				shader_description = 'Vehicle_Opaque_PaintGloss_Textured_LightmappedLights_Wrap'
+				mShaderId = shaders[shader_description]
+			elif resource_type == "WheelGraphicsSpec":
+				shader_description = 'Vehicle_Wheel_Opaque'
+				mShaderId = shaders[shader_description]
+			elif resource_type == "CharacterSpec":
+				shader_description = 'Character_Opaque_Textured_NormalMap_SpecMap_Skin'
+				mShaderId = shaders[shader_description]
+	
+	mShaderId = shaders[shader_description]
+	return (mShaderId, shader_description)
+
+
+def get_default_material_parameters_mw_copy(shader_type):
 	status = 0
 	parameters_Indices = []
 	parameters_Ones = []
@@ -1357,7 +2529,301 @@ def get_default_material_parameters(shader_type):
 		parameters_Data = [(0.00039999998989515007, 0.0, 0.0, 0.0),
 						   (1.0, 0.0, 0.0, 0.0)]
 		parameters_Names = ['PbrMaterialClearcoatSpecular', 'PbrMaterialClearcoatFresnel']
+	
+	elif shader_type.lower() == "tyrenew":
+		parameters_Indices = [4, 3, 2, 1, 0]
+		parameters_Ones = [1, 1, 1, 1, 1]
+		parameters_NamesHash = [529556121, 2580468578, 3057425025, 3447747285, 3998419168]
+		parameters_Data = [(0.07227185368537903, 0.061246052384376526, 0.05126945674419403, 0.899183452129364),
+						   (0.27049779891967773, 0.24228112399578094, 0.21223075687885284, 0.047659896314144135),
+						   (0.00039999998989515007, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0),
+						   (0.0, 0.0, 0.0, 0.0)]
+		parameters_Names = ['PbrMaterialDustColour', 'PbrMaterialDirtColour', 'PbrMaterialClearcoatSpecular', 'PbrMaterialClearcoatFresnel', 'g_flipUvsOnFlippedTechnique']
+	
+	elif shader_type.lower() == "tire_test":
+		parameters_Indices = [3, 2, 1, 0, 4]
+		parameters_Ones = [1, 1, 1, 1, 1]
+		parameters_NamesHash = [529556121, 2580468578, 3057425025, 3447747285, 3998419168]
+		parameters_Data = [(0.07227185368537903, 0.061246052384376526, 0.05126945674419403, 0.899183452129364),
+						   (0.27049779891967773, 0.24228112399578094, 0.21223075687885284, 0.047659896314144135),
+						   (0.00039999998989515007, 0.0, 0.0, 0.0),
+						   (0.0, 0.0, 0.0, 0.0),
+						   (0.0, 0.0, 0.0, 0.0)]
+		parameters_Names = ['PbrMaterialDustColour', 'PbrMaterialDirtColour', 'PbrMaterialClearcoatSpecular', 'PbrMaterialClearcoatFresnel', 'g_flipUvsOnFlippedTechnique']
+	
+	else:
+		status = 1
+	
+	return (status, [parameters_Indices, parameters_Ones, parameters_NamesHash, parameters_Data, parameters_Names])
 
+
+def get_default_material_parameters_hp_copy(shader_type):
+	status = 0
+	parameters_Indices = []
+	parameters_Ones = []
+	parameters_NamesHash = []
+	parameters_Data = []
+	parameters_Names = []
+	
+	if shader_type.lower() == "glass" or shader_type.lower() == "window" or shader_type.lower() == "windows":
+		#shader_type = Vehicle_Glass_Emissive_Coloured_Singlesided_Wrap
+		parameters_Indices = [1, 2, 9, 4, 5, 6, 0, 8, 3, 7]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 549131089, 843472246, 1350180620, 1444230008, 2342768594, 3143708811, 3681973827, 3743314456, 4272862365]
+		parameters_Data = [(0.0010000000474974513, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 1.0), (1.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), (0.19599999487400055, 0.6549999713897705, 0.7879999876022339, 1.0), (0.10999999940395355, 3.5, 1.0, 0.0), (0.25, 0.0, 0.0, 1.0), (0.05000000074505806, 0.4000000059604645, 3.0, 0.25), (0.07035999745130539, 0.07035999745130539, 0.07035999745130539, 1.0), (0.0003035269910469651, 0.0027317428030073643, 0.0036765073891729116, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'ReversingColour', 'mSelfIlluminationMultiplier', 'UnusedColour', 'mCrackedGlassSpecularColour', 'mCrackedGlassSpecularControls', 'BrakeColour', 'mGlassControls', 'RunningColour', 'mGlassColour']
+	
+	elif shader_type.lower() == "glass_black":
+		#shader_type = Vehicle_Glass_Emissive_Coloured_Singlesided_Wrap
+		parameters_Indices = [1, 2, 9, 4, 5, 6, 0, 8, 3, 7]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 549131089, 843472246, 1350180620, 1444230008, 2342768594, 3143708811, 3681973827, 3743314456, 4272862365]
+		parameters_Data = [(0.0010000000474974513, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 1.0), (1.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), (0.19599999487400055, 0.6549999713897705, 0.7879999876022339, 1.0), (0.10999999940395355, 3.5, 1.0, 0.0), (0.25, 0.0, 0.0, 1.0), (0.05000000074505806, 0.4000000059604645, 3.5, 0.0), (0.07035999745130539, 0.07035999745130539, 0.07035999745130539, 1.0), (0.0, 0.0, 0.0, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'ReversingColour', 'mSelfIlluminationMultiplier', 'UnusedColour', 'mCrackedGlassSpecularColour', 'mCrackedGlassSpecularControls', 'BrakeColour', 'mGlassControls', 'RunningColour', 'mGlassColour']
+	
+	elif shader_type.lower() == "glass_doublesided":
+		#shader_type = Vehicle_Glass_Emissive_Coloured_Wrap
+		parameters_Indices = [1, 2, 9, 4, 5, 6, 0, 8, 3, 7]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 549131089, 843472246, 1350180620, 1444230008, 2342768594, 3143708811, 3681973827, 3743314456, 4272862365]
+		parameters_Data = [(0.0010000000474974513, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 1.0), (1.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), (0.19599999487400055, 0.6549999713897705, 0.7879999876022339, 1.0), (0.10999999940395355, 3.5, 1.0, 0.0), (0.25, 0.0, 0.0, 1.0), (0.03999999910593033, 1.0, 3.0, 0.699999988079071), (0.07035999745130539, 0.07035999745130539, 0.07035999745130539, 1.0), (0.0, 0.0, 0.0, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'ReversingColour', 'mSelfIlluminationMultiplier', 'UnusedColour', 'mCrackedGlassSpecularColour', 'mCrackedGlassSpecularControls', 'BrakeColour', 'mGlassControls', 'RunningColour', 'mGlassColour']
+	
+	elif shader_type.lower() == "mirror" or shader_type == "VehicleNFS13_Mirror":
+		#shader_type = Vehicle_Opaque_Reflective
+		parameters_Indices = [1, 0, 2, 3, 4]
+		parameters_Ones = [1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 1055962784, 1738324391, 1798261942, 4142038186]
+		parameters_Data = [(0.0010000000474974513, 0.0, 0.0, 0.0), (1.0, 1.0, 0.0, 0.0), (1.0, 1.0, 3.0, 0.0), (0.05000000074505806, 0.10000000149011612, 4.0, 0.0), (0.2015562504529953, 0.2015562504529953, 0.2015562504529953, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'LightMultipliers', 'mReflectionControls', 'mSpecularControls', 'materialDiffuse']
+	
+	elif shader_type.lower() == "chrome" or shader_type == "VehicleNFS13_Chrome" or shader_type == "VehicleNFS13_Body_Chrome":
+		#shader_type = Vehicle_Opaque_Emissive_Reflective_AO
+		parameters_Indices = [5, 4, 7, 0, 6, 8, 2, 1, 3, 9]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [220664079, 422585019, 843472246, 1055962784, 1738324391, 1798261942, 2143891951, 3328281617, 4064316377, 4142038186]
+		parameters_Data = [(0.0, 0.0, 0.0, 0.0), (0.0010000000474974513, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 0.0), (0.20000000298023224, 0.44999998807907104, 5.0, 0.0), (7.0, 0.0, 30.0, 0.0), (1.0, 1.0, 1.0, 1.0), (1.0, 1.0, 1.0, 1.0), (1.0, 0.0, 0.0, 1.0), (0.00802319310605526, 0.00802319310605526, 0.00802319310605526, 1.0)]
+		parameters_Names = ['mEmissiveAdditiveAmount', 'MaterialShadowMapBias', 'mSelfIlluminationMultiplier', 'LightMultipliers', 'mReflectionControls', 'mSpecularControls', 'LightmappedLightsGreenChannelColour', 'LightmappedLightsBlueChannelColour', 'LightmappedLightsRedChannelColour', 'materialDiffuse']
+	
+	elif shader_type.lower() == "metal":
+		#shader_type = Vehicle_Opaque_Emissive_Reflective_AO
+		parameters_Indices = [5, 4, 7, 0, 6, 8, 2, 1, 3, 9]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [220664079, 422585019, 843472246, 1055962784, 1738324391, 1798261942, 2143891951, 3328281617, 4064316377, 4142038186]
+		parameters_Data = [(0.0, 0.0, 0.0, 0.0), (0.0010000000474974513, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 0.0), (0.20000000298023224, 0.44999998807907104, 5.0, 0.0), (7.0, 0.0, 30.0, 0.0), (1.0, 1.0, 1.0, 1.0), (1.0, 1.0, 1.0, 1.0), (1.0, 0.0, 0.0, 1.0), (0.00802319310605526, 0.00802319310605526, 0.00802319310605526, 1.0)]
+		parameters_Names = ['mEmissiveAdditiveAmount', 'MaterialShadowMapBias', 'mSelfIlluminationMultiplier', 'LightMultipliers', 'mReflectionControls', 'mSpecularControls', 'LightmappedLightsGreenChannelColour', 'LightmappedLightsBlueChannelColour', 'LightmappedLightsRedChannelColour', 'materialDiffuse']
+	
+	elif shader_type.lower() == "tyre" or shader_type == "VehicleNFS13_Tyre" or shader_type == "VehicleNFS13_Body_Tyre":
+		#shader_type = Vehicle_Tyre
+		parameters_Indices = [0, 1]
+		parameters_Ones = [1, 1]
+		parameters_NamesHash = [1055962784, 1798261942]
+		parameters_Data = [(0.800000011920929, 0.4000000059604645, 0.0, 0.0),
+						   (0.12200000137090683, 1.0, 35.0, 1.0)]
+		parameters_Names = ['LightMultipliers', 'mSpecularControls']
+	
+	elif shader_type.lower() == "bodypaint_livery":
+		#shader_type = Vehicle_Opaque_PaintGloss_Textured_LightmappedLights_Livery_Wrap
+		parameters_Indices = [3, 5, 4, 1, 0, 2]
+		parameters_Ones = [1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 843472246, 922074327, 2143891951, 3328281617, 4064316377]
+		parameters_Data = [(0.0010000000474974513, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0), (1.0, 0.9559733271598816, 0.68668532371521, 1.0), (1.0, 1.0, 1.0, 1.0), (1.0, 0.021219009533524513, 0.0030352699104696512, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'mSelfIlluminationMultiplier', 'mPaintColourIndex', 'LightmappedLightsGreenChannelColour', 'LightmappedLightsBlueChannelColour', 'LightmappedLightsRedChannelColour']
+	
+	elif shader_type.lower() == "bodylivery":
+		#shader_type = Vehicle_Opaque_PaintGloss_Textured_LightmappedLights_ColourOverride_Livery
+		parameters_Indices = [10, 6, 4, 7, 14, 5, 8, 11, 0, 9, 12, 2, 1, 3, 13]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [83815342, 220664079, 422585019, 469755418, 536136062, 780838486, 784529858, 843472246, 1055962784, 1738324391, 1798261942, 2143891951, 3328281617, 4064316377, 4142038186]
+		parameters_Data = [(0.4000000059604645, 0.15000000596046448, 50.0, 0.0), (0.0, 0.0, 0.0, 0.0), (0.0010000000474974513, 0.0, 0.0, 0.0), (0.699999988079071, 0.20000000298023224, 0.5, 0.0), (0.32314321398735046, 0.32314321398735046, 0.32314321398735046, 1.0), (2.0, 0.0, 1.0, 0.0), (2.0, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0), (2.0, 0.800000011920929, 1.0, 0.5), (0.03999999910593033, 0.699999988079071, 7.0, 0.0), (2.0, 0.20000000298023224, 55.0, 1.0), (0.9559733271598816, 0.9473065137863159, 1.0, 1.0), (1.0, 1.0, 1.0, 1.0), (1.0, 0.021219009533524513, 0.0030352699104696512, 1.0), (0.015208514407277107, 0.017641954123973846, 0.023153366521000862, 1.0)]
+		parameters_Names = ['mScratchSpecularControls', 'mEmissiveAdditiveAmount', 'MaterialShadowMapBias', 'mEnvSpecularControls', 'pearlescentColour', 'mDiffuseFresnel', 'mPearlescentPower', 'mSelfIlluminationMultiplier', 'LightMultipliers', 'mReflectionControls', 'mSpecularControls', 'LightmappedLightsGreenChannelColour', 'LightmappedLightsBlueChannelColour', 'LightmappedLightsRedChannelColour', 'materialDiffuse']
+	
+	elif shader_type.lower() == "bodypaint" or shader_type.lower() == "carpaint":
+		#shader_type = Vehicle_Opaque_PaintGloss_Textured_LightmappedLights_Wrap
+		parameters_Indices = [3, 5, 4, 1, 0, 2]
+		parameters_Ones = [1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 843472246, 922074327, 2143891951, 3328281617, 4064316377]
+		parameters_Data = [(0.0010000000474974513, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 1.0), (1.0, 1.0, 1.0, 1.0), (1.0, 0.0, 0.0, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'mSelfIlluminationMultiplier', 'mPaintColourIndex', 'LightmappedLightsGreenChannelColour', 'LightmappedLightsBlueChannelColour', 'LightmappedLightsRedChannelColour']
+	
+	elif shader_type.lower() == "bodycolor":
+		#shader_type = Vehicle_Opaque_PaintGloss_Textured_LightmappedLights_ColourOverride
+		parameters_Indices = [10, 6, 4, 7, 14, 5, 8, 11, 0, 9, 12, 2, 1, 3, 13]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [83815342, 220664079, 422585019, 469755418, 536136062, 780838486, 784529858, 843472246, 1055962784, 1738324391, 1798261942, 2143891951, 3328281617, 4064316377, 4142038186]
+		parameters_Data = [(0.25, 0.25, 50.0, 0.20000000298023224), (0.0, 0.0, 0.0, 0.0), (0.0010000000474974513, 0.0, 0.0, 0.0), (0.20000000298023224, 0.20000000298023224, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), (1.0, 0.75, 5.0, 0.0), (4.0, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 0.0), (0.009999999776482582, 0.5, 3.0, 0.0), (0.05000000074505806, 0.10000000149011612, 40.0, 0.0), (1.0, 0.9386857151985168, 0.5088813304901123, 1.0), (1.0, 1.0, 1.0, 1.0), (1.0, 0.021219009533524513, 0.0030352699104696512, 1.0), (0.0036765073891729116, 0.0036765073891729116, 0.0036765073891729116, 1.0)]
+		parameters_Names = ['mScratchSpecularControls', 'mEmissiveAdditiveAmount', 'MaterialShadowMapBias', 'mEnvSpecularControls', 'pearlescentColour', 'mDiffuseFresnel', 'mPearlescentPower', 'mSelfIlluminationMultiplier', 'LightMultipliers', 'mReflectionControls', 'mSpecularControls', 'LightmappedLightsGreenChannelColour', 'LightmappedLightsBlueChannelColour', 'LightmappedLightsRedChannelColour', 'materialDiffuse']
+	
+	elif shader_type.lower() == "badge" or shader_type.lower() == "emblem" or shader_type.lower() == "symbol" or shader_type.lower() == "transparent":
+		#shader_type = Vehicle_Greyscale_Textured_Normalmapped_Reflective
+		parameters_Indices = [1, 0, 2, 3, 4]
+		parameters_Ones = [1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 1055962784, 1738324391, 1798261942, 4142038186]
+		parameters_Data = [(0.0010000000474974513, 0.0, 0.0, 0.0), (3.0, 1.0, 0.0, 0.0), (0.013000000268220901, 0.30000001192092896, 3.0, 0.0), (0.5, 1.0, 60.0, 1.0), (0.0, 0.0, 0.0, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'LightMultipliers', 'mReflectionControls', 'mSpecularControls', 'materialDiffuse']
+	
+	elif shader_type.lower() == "grill":
+		#shader_type = Vehicle_1Bit_Textured_NormalMapped_Emissive_AO_Livery
+		parameters_Indices = [6, 5, 4, 7, 0, 8, 2, 1, 3, 9]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [83815342, 220664079, 422585019, 843472246, 1055962784, 1798261942, 2143891951, 3328281617, 4064316377, 4142038186]
+		parameters_Data = [(0.009999999776482582, 0.15000000596046448, 5.0, 0.0), (0.0, 0.0, 0.0, 0.0), (0.0010000000474974513, 0.0, 0.0, 0.0), (60.0, 0.0, 0.0, 0.0), (5.0, 0.10000000149011612, 1.0, 0.0), (0.009999999776482582, 0.05000000074505806, 60.0, 0.0), (1.0, 1.0, 1.0, 1.0), (1.0, 1.0, 1.0, 1.0), (1.0, 0.0, 0.0, 1.0), (0.0, 0.0, 0.0, 1.0)]
+		parameters_Names = ['mScratchSpecularControls', 'mEmissiveAdditiveAmount', 'MaterialShadowMapBias', 'mSelfIlluminationMultiplier', 'LightMultipliers', 'mSpecularControls', 'LightmappedLightsGreenChannelColour', 'LightmappedLightsBlueChannelColour', 'LightmappedLightsRedChannelColour', 'materialDiffuse']
+	
+	elif shader_type.lower() == "license_plate_number" or shader_type.lower() == "licenseplate_number" or shader_type == "VehicleNFS13_Licenseplate_Number" or shader_type == "VehicleNFS13_License_Plate_Number":
+		#shader_type = Vehicle_Opaque_Textured_NormalMapped_Reflective_Emissive_AO_Livery
+		parameters_Indices = [7, 5, 4, 8, 0, 6, 9, 2, 1, 3, 10]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [83815342, 220664079, 422585019, 843472246, 1055962784, 1738324391, 1798261942, 2143891951, 3328281617, 4064316377, 4142038186]
+		parameters_Data = [(0.25, 0.25, 50.0, 0.10000000149011612), (0.0, 0.0, 0.0, 0.0), (0.0010000000474974513, 0.0, 0.0, 0.0), (1.5, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 0.0), (0.009999999776482582, 0.009999999776482582, 3.0, 0.0), (0.02500000037252903, 0.800000011920929, 80.0, 1.0), (1.0, 1.0, 1.0, 1.0), (0.0, 0.0, 0.0, 1.0), (0.0, 0.0, 0.0, 1.0), (1.0, 1.0, 1.0, 1.0)]
+		parameters_Names = ['mScratchSpecularControls', 'mEmissiveAdditiveAmount', 'MaterialShadowMapBias', 'mSelfIlluminationMultiplier', 'LightMultipliers', 'mReflectionControls', 'mSpecularControls', 'LightmappedLightsGreenChannelColour', 'LightmappedLightsBlueChannelColour', 'LightmappedLightsRedChannelColour', 'materialDiffuse']
+	
+	elif shader_type.lower() == "license_plate" or shader_type.lower() == "licenseplate" or shader_type == "VehicleNFS13_Licenseplate" or shader_type == "VehicleNFS13_License_Plate":
+		#shader_type = Vehicle_Opaque_Textured_NormalMapped_Reflective_Emissive_AO_Livery
+		parameters_Indices = [7, 5, 4, 8, 0, 6, 9, 2, 1, 3, 10]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [83815342, 220664079, 422585019, 843472246, 1055962784, 1738324391, 1798261942, 2143891951, 3328281617, 4064316377, 4142038186]
+		parameters_Data = [(0.25, 0.25, 50.0, 0.10000000149011612), (0.0, 0.0, 0.0, 0.0), (0.0010000000474974513, 0.0, 0.0, 0.0), (1.5, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 0.0), (0.009999999776482582, 0.009999999776482582, 3.0, 0.0), (0.02500000037252903, 0.800000011920929, 80.0, 1.0), (1.0, 1.0, 1.0, 1.0), (0.0, 0.0, 0.0, 1.0), (0.0, 0.0, 0.0, 1.0), (1.0, 1.0, 1.0, 1.0)]
+		parameters_Names = ['mScratchSpecularControls', 'mEmissiveAdditiveAmount', 'MaterialShadowMapBias', 'mSelfIlluminationMultiplier', 'LightMultipliers', 'mReflectionControls', 'mSpecularControls', 'LightmappedLightsGreenChannelColour', 'LightmappedLightsBlueChannelColour', 'LightmappedLightsRedChannelColour', 'materialDiffuse']
+	
+	elif shader_type.lower() == "dullplastic" or shader_type.lower() == "dull_plastic":
+		#shader_type = Vehicle_Opaque_Emissive_AO
+		parameters_Indices = [5, 4, 6, 0, 7, 2, 1, 3, 8]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [220664079, 422585019, 843472246, 1055962784, 1798261942, 2143891951, 3328281617, 4064316377, 4142038186]
+		parameters_Data = [(0.0, 0.0, 0.0, 0.0), (0.0010000000474974513, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 0.0), (0.15000000596046448, 0.20000000298023224, 50.0, 0.6000000238418579), (1.0, 1.0, 1.0, 1.0), (1.0, 1.0, 1.0, 1.0), (1.0, 0.0, 0.0, 1.0), (0.012983032502233982, 0.012983032502233982, 0.012983032502233982, 1.0)]
+		parameters_Names = ['mEmissiveAdditiveAmount', 'MaterialShadowMapBias', 'mSelfIlluminationMultiplier', 'LightMultipliers', 'mSpecularControls', 'LightmappedLightsGreenChannelColour', 'LightmappedLightsBlueChannelColour', 'LightmappedLightsRedChannelColour', 'materialDiffuse']
+	
+	elif shader_type.lower() == "interior" or shader_type == "VehicleNFS13_Interior":
+		#shader_type = Vehicle_Opaque_Textured_Phong
+		parameters_Indices = [1, 0, 2, 3]
+		parameters_Ones = [1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 1055962784, 1798261942, 4142038186]
+		parameters_Data = [(0.001500000013038516, 0.0, 0.0, 0.0), (1.0, 0.699999988079071, 0.0, 0.0), (0.05000000074505806, 0.8500000238418579, 2.0, 1.0), (1.0, 1.0, 1.0, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'LightMultipliers', 'mSpecularControls', 'materialDiffuse']
+	
+	elif shader_type.lower() == "caliper" or shader_type.lower() == "caliper_textured" or shader_type == "VehicleNFS13_Caliper":
+		#shader_type = Vehicle_Wheel_1Bit_Alpha_Normalmap
+		parameters_Indices = [2, 4, 1, 6, 7, 5, 3, 0]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 780838486, 1055962784, 1738324391, 1798261942, 1967441240, 3344773910, 3998419168]
+		parameters_Data = [(9.999999747378752e-06, 0.0, 0.0, 0.0), (1.0, 0.0, 5.0, 0.0), (5.0, 1.0, 0.0, 0.0), (0.0, 0.0, 30.0, 0.0), (1.0, 1.0, 60.0, 0.0), (0.012983032502233982, 0.012983032502233982, 0.012983032502233982, 1.0), (0.0, 0.0, 3.0, 0.20000000298023224), (0.0, 0.0, 0.0, 0.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'mDiffuseFresnel', 'LightMultipliers', 'mReflectionControls', 'mSpecularControls', 'mMaterialDiffuse', 'mBlurredReflectionControls', 'g_flipUvsOnFlippedTechnique']
+	
+	elif shader_type.lower() == "brakedisc" or shader_type == "VehicleNFS13_BrakeDisc":
+		#shader_type = Vehicle_Wheel_Brakedisc_1Bit_Blur_Normalmap
+		parameters_Indices = [2, 4, 1, 5, 6, 3, 0]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 780838486, 1055962784, 1738324391, 1798261942, 3344773910, 3998419168]
+		parameters_Data = [(9.999999747378752e-06, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 0.0), (0.3499999940395355, 0.699999988079071, 1.0, 0.0), (0.0, 0.0, 0.0, 0.0), (32.0, 0.44999998807907104, 55.0, 0.0), (0.16500000655651093, 0.16500000655651093, 12.0, 0.0), (0.0, 0.0, 0.0, 0.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'mDiffuseFresnel', 'LightMultipliers', 'mReflectionControls', 'mSpecularControls', 'mBlurredReflectionControls', 'g_flipUvsOnFlippedTechnique']
+	
+	elif shader_type.lower() == "rim":
+		#shader_type = Vehicle_Wheel_Opaque
+		parameters_Indices = [2, 4, 1, 5, 6, 3, 0]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 780838486, 1055962784, 1738324391, 1798261942, 3344773910, 3998419168]
+		parameters_Data = [(9.999999747378752e-06, 0.0, 0.0, 0.0), (0.699999988079071, 1.0, 5.0, 0.0), (2.0, 1.0, 0.6000000238418579, 0.0), (0.10000000149011612, 0.30000001192092896, 5.0, 0.0), (4.0, 1.0, 15.0, 0.0), (0.10000000149011612, 0.30000001192092896, 12.0, 1.0), (0.0, 0.0, 0.0, 0.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'mDiffuseFresnel', 'LightMultipliers', 'mReflectionControls', 'mSpecularControls', 'mBlurredReflectionControls', 'g_flipUvsOnFlippedTechnique']
+	
+	elif shader_type.lower() == "rimbadge":
+		#shader_type = Vehicle_Wheel_Alpha_Normalmap
+		parameters_Indices = [2, 4, 1, 5, 6, 3, 0]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 780838486, 1055962784, 1738324391, 1798261942, 3344773910, 3998419168]
+		parameters_Data = [(9.999999747378752e-06, 0.0, 0.0, 0.0), (1.0, 1.0, 5.0, 0.0), (2.0, 0.5, 1.0, 0.0), (0.013000000268220901, 0.30000001192092896, 3.0, 0.0), (4.5, 1.0, 50.0, 0.8999999761581421), (0.6000000238418579, 0.0, 3.0, 0.20000000298023224), (1.0, 0.0, 0.0, 0.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'mDiffuseFresnel', 'LightMultipliers', 'mReflectionControls', 'mSpecularControls', 'mBlurredReflectionControls', 'g_flipUvsOnFlippedTechnique']
+	
+	elif shader_type.lower() == "chassis" or shader_type == "VehicleNFS13_Chassis":
+		#shader_type = Vehicle_Opaque_Textured
+		parameters_Indices = [1, 0, 2, 3]
+		parameters_Ones = [1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 1055962784, 1798261942, 4142038186]
+		parameters_Data = [(0.0010000000474974513, 0.0, 0.0, 0.0), (2.0, 0.3499999940395355, 0.0, 0.0), (0.03500000014901161, 0.25, 70.0, 1.0), (1.0, 1.0, 1.0, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'LightMultipliers', 'mSpecularControls', 'materialDiffuse']
+	
+	elif shader_type.lower() == "engine":
+		#shader_type = Vehicle_Opaque_Textured_Normalmapped_AO
+		parameters_Indices = [1, 0, 2, 3]
+		parameters_Ones = [1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 1055962784, 1798261942, 4142038186]
+		parameters_Data = [(0.0010000000474974513, 0.0, 0.0, 0.0), (1.0, 1.0, 0.0, 0.0), (0.11999999731779099, 0.5, 20.0, 0.0), (1.0, 1.0, 1.0, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'LightMultipliers', 'mSpecularControls', 'materialDiffuse']
+	
+	elif shader_type.lower() == "carbonfiber" or shader_type == "VehicleNFS13_Carbonfiber" or shader_type.lower() == "carbonfiber2":
+		#shader_type = Vehicle_Opaque_PaintGloss_Textured_LightmappedLights_ColourOverride_Livery
+		parameters_Indices = [10, 6, 4, 7, 14, 5, 8, 11, 0, 9, 12, 2, 1, 3, 13]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [83815342, 220664079, 422585019, 469755418, 536136062, 780838486, 784529858, 843472246, 1055962784, 1738324391, 1798261942, 2143891951, 3328281617, 4064316377, 4142038186]
+		parameters_Data = [(0.4000000059604645, 0.15000000596046448, 50.0, 0.0), (0.0, 0.0, 0.0, 0.0), (0.0010000000474974513, 0.0, 0.0, 0.0), (0.44999998807907104, 0.20000000298023224, 0.0, 0.0), (1.0, 1.0, 1.0, 1.0), (1.5, 0.0, 4.0, 0.0), (20.0, 0.0, 0.0, 0.0), (1.0, 0.0, 0.0, 0.0), (1.0, 0.699999988079071, 1.0, 0.0), (0.019999999552965164, 0.4000000059604645, 12.0, 0.0), (3.0, 0.4000000059604645, 35.0, 0.9800000190734863), (0.9559733271598816, 0.9473065137863159, 1.0, 1.0), (1.0, 1.0, 1.0, 1.0), (1.0, 0.021219009533524513, 0.0030352699104696512, 1.0), (1.0, 1.0, 1.0, 1.0)]
+		parameters_Names = ['mScratchSpecularControls', 'mEmissiveAdditiveAmount', 'MaterialShadowMapBias', 'mEnvSpecularControls', 'pearlescentColour', 'mDiffuseFresnel', 'mPearlescentPower', 'mSelfIlluminationMultiplier', 'LightMultipliers', 'mReflectionControls', 'mSpecularControls', 'LightmappedLightsGreenChannelColour', 'LightmappedLightsBlueChannelColour', 'LightmappedLightsRedChannelColour', 'materialDiffuse']
+	
+	elif shader_type.lower() == "glasscolourise" or shader_type.lower() == "glasscolour" or shader_type.lower() == "glasscolor":
+		#shader_type = Vehicle_Glass_Emissive_Coloured
+		parameters_Indices = [1, 2, 9, 4, 5, 6, 0, 8, 3, 7]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 549131089, 843472246, 1350180620, 1444230008, 2342768594, 3143708811, 3681973827, 3743314456, 4272862365]
+		parameters_Data = [(0.0010000000474974513, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 1.0), (1.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0, 1.0), (0.19599999487400055, 0.6549999713897705, 0.7879999876022339, 1.0), (0.10999999940395355, 3.5, 1.0, 0.0), (0.25, 0.0, 0.0, 1.0), (0.029999999329447746, 0.6000000238418579, 3.0, 0.949999988079071), (0.07035999745130539, 0.07035999745130539, 0.07035999745130539, 1.0), (1.0, 0.0, 0.01032982300966978, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'ReversingColour', 'mSelfIlluminationMultiplier', 'UnusedColour', 'mCrackedGlassSpecularColour', 'mCrackedGlassSpecularControls', 'BrakeColour', 'mGlassControls', 'RunningColour', 'mGlassColour']
+	
+	elif shader_type.lower() == "tyrenew":
+		#shader_type = Vehicle_Tyre
+		parameters_Indices = [0, 1]
+		parameters_Ones = [1, 1]
+		parameters_NamesHash = [1055962784, 1798261942]
+		parameters_Data = [(0.800000011920929, 0.4000000059604645, 0.0, 0.0),
+						   (0.12200000137090683, 1.0, 35.0, 1.0)]
+		parameters_Names = ['LightMultipliers', 'mSpecularControls']
+		
+	elif shader_type.lower() == "tire_test":
+		#shader_type = Vehicle_Tyre
+		parameters_Indices = [0, 1]
+		parameters_Ones = [1, 1]
+		parameters_NamesHash = [1055962784, 1798261942]
+		parameters_Data = [(0.800000011920929, 0.4000000059604645, 0.0, 0.0),
+						   (0.12200000137090683, 1.0, 35.0, 1.0)]
+		parameters_Names = ['LightMultipliers', 'mSpecularControls']
+	
+	elif shader_type.lower() == "coplight":
+		#shader_type = Vehicle_Glass_LocalEmissive_Coloured
+		parameters_Indices = [0, 6, 2, 3, 7, 1, 5, 4]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 843472246, 1444230008, 2342768594, 2727547134, 3178546268, 3681973827, 4272862365]
+		parameters_Data = [(9.999999747378752e-06, 0.0, 0.0, 0.0), (2.0, 0.0, 0.0, 0.0), (0.19599999487400055, 0.6549999713897705, 0.7879999876022339, 1.0), (0.10999999940395355, 3.5, 1.0, 0.0), (0.5, 0.0, 0.0, 0.0), (0.0666259378194809, 0.0, 0.0, 1.0), (0.009999999776482582, 1.0, 5.0, 0.5), (0.21223075687885284, 0.0006070539820939302, 0.0, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'mSelfIlluminationMultiplier', 'mCrackedGlassSpecularColour', 'mCrackedGlassSpecularControls', 'mSelfIlluminationRadiusMultiplier', 'gEmissiveColour', 'mGlassControls', 'mGlassColour']
+	
+	elif shader_type.lower() == "caliperbadge":
+		#shader_type = Vehicle_Wheel_1Bit_Alpha
+		parameters_Indices = [2, 4, 1, 5, 6, 3, 0]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 780838486, 1055962784, 1738324391, 1798261942, 3344773910, 3998419168]
+		parameters_Data = [(9.999999747378752e-06, 0.0, 0.0, 0.0), (1.0, 1.0, 5.0, 0.0), (1.0, 1.0, 0.0, 0.0), (0.0, 0.0, 3.0, 0.0), (0.0, 1.0, 50.0, 0.8999999761581421), (0.0, 0.0, 3.0, 0.20000000298023224), (1.0, 0.0, 0.0, 0.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'mDiffuseFresnel', 'LightMultipliers', 'mReflectionControls', 'mSpecularControls', 'mBlurredReflectionControls', 'g_flipUvsOnFlippedTechnique']
+	
+	elif shader_type.lower() == "character" or shader_type.lower() == "driver":
+		#shader_type = Character_Opaque_Textured_NormalMap_SpecMap_Skin
+		parameters_Indices = [4, 3, 1, 5, 2, 0, 6]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 1437161761, 1500813362, 1798261942, 2448018893, 3773525911, 4142038186]
+		parameters_Data = [(0.0, 0.0, 0.0, 0.0), (2.0, 0.0, 0.0, 0.0), (0.05000000074505806, 0.0, 0.0, 0.0), (0.25, 1.0, 50.0, 0.0), (0.4000000059604645, 0.0, 0.0, 0.0), (1.2999999523162842, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'KeyLightShapePower', 'FillLightBrightness', 'mSpecularControls', 'KeyLightBrightness', 'AmbientLightBrightness', 'materialDiffuse']
+	
+	elif shader_type.lower() == "characterskin" or shader_type.lower() == "skin":
+		#shader_type = Character_Opaque_Textured_NormalMap_SpecMap_Skin
+		parameters_Indices = [4, 3, 1, 5, 2, 0, 6]
+		parameters_Ones = [1, 1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 1437161761, 1500813362, 1798261942, 2448018893, 3773525911, 4142038186]
+		parameters_Data = [(0.0, 0.0, 0.0, 0.0), (2.5, 0.0, 0.0, 0.0), (0.09000000357627869, 0.0, 0.0, 0.0), (3.0, 1.0, 30.0, 1.0), (1.2000000476837158, 0.0, 0.0, 0.0), (1.399999976158142, 0.0, 0.0, 0.0), (0.7379103899002075, 0.7379103899002075, 0.7379103899002075, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'KeyLightShapePower', 'FillLightBrightness', 'mSpecularControls', 'KeyLightBrightness', 'AmbientLightBrightness', 'materialDiffuse']
+	
+	elif shader_type.lower() == "hair":
+		#shader_type = Character_Greyscale_Textured_Doublesided_Skin
+		parameters_Indices = [4, 3, 1, 2, 0, 5]
+		parameters_Ones = [1, 1, 1, 1, 1, 1]
+		parameters_NamesHash = [422585019, 1437161761, 1500813362, 2448018893, 3773525911, 4142038186]
+		parameters_Data = [(0.0, 0.0, 0.0, 0.0), (2.0, 0.0, 0.0, 0.0), (0.05000000074505806, 0.0, 0.0, 0.0), (0.4000000059604645, 0.0, 0.0, 0.0), (1.2999999523162842, 0.0, 0.0, 0.0), (1.0, 1.0, 1.0, 1.0)]
+		parameters_Names = ['MaterialShadowMapBias', 'KeyLightShapePower', 'FillLightBrightness', 'KeyLightBrightness', 'AmbientLightBrightness', 'materialDiffuse']
+	
 	else:
 		status = 1
 	
@@ -1587,7 +3053,7 @@ def bp_convert_to_crc(append_type=True, append_random_int=True):
 	return {'FINISHED'}
 
 
-def mw_convert_to_crc(append_type=True, append_random_int=True):
+def nfs_convert_to_crc(append_type=True, append_random_int=True):
 	## Definitions
 	start = 0
 	stop = 10000000
@@ -1626,7 +3092,7 @@ def mw_convert_to_crc(append_type=True, append_random_int=True):
 			lights.append(object)
 		
 		elif object.type == "EMPTY":
-			if resource_type in ("GraphicsSpec", "WheelGraphicsSpec", "InstanceList", "PropInstanceList", "DynamicInstanceList", "CompoundInstanceList", "Wheels"):
+			if resource_type in ("GraphicsSpec", "WheelGraphicsSpec", "CharacterSpec", "InstanceList", "PropInstanceList", "DynamicInstanceList", "CompoundInstanceList", "Wheels"):
 				models.append(object)
 			elif resource_type in ("PolygonSoupList", "Collision"):
 				polygonsoups.append(object)
@@ -1781,6 +3247,13 @@ def parse_name(object):
 	return (object_name, count)
 
 
+def calculate_padding(lenght, alignment):
+	division1 = (lenght/alignment)
+	division2 = math.ceil(lenght/alignment)
+	padding = int((division2 - division1)*alignment)
+	return padding
+
+
 def bytes_to_id(id):
 	id = binascii.hexlify(id)
 	id = str(id,'ascii')
@@ -1837,6 +3310,16 @@ def NFSMWLibraryGet():
 	return None
 
 
+def NFSHPLibraryGet():
+	spaths = bpy.utils.script_paths()
+	for rpath in spaths:
+		tpath = rpath + '\\addons\\NeedForSpeedHotPursuit'
+		if os.path.exists(tpath):
+			npath = '"' + tpath + '"'
+			return tpath
+	return None
+
+
 """
 Main menu
 """
@@ -1866,16 +3349,18 @@ class MESH_MT_material_properties_submenu(bpy.types.Menu):
 	def draw(self, context):
 		layout = self.layout
 		layout.operator(MESH_OT_bp_properties.bl_idname, icon="EVENT_B")
+		layout.operator(MESH_OT_hp_properties.bl_idname, icon="EVENT_N")
 		layout.operator(MESH_OT_mw_properties.bl_idname, icon="EVENT_N")
 
 
 class MESH_MT_load_effects_driver_submenu(bpy.types.Menu):
 	"""Load effects and driver data"""
 	bl_idname = "MESH_MT_load_effects_driver_submenu"
-	bl_label = "Load effects/driver data"
+	bl_label = "Load skeleton/effects/driver data"
 
 	def draw(self, context):
 		layout = self.layout
+		layout.operator(MESH_OT_hp_load_effect_driver.bl_idname, icon="EVENT_N")
 		layout.operator(MESH_OT_mw_load_effect_driver.bl_idname, icon="EVENT_N")
 
 
@@ -1887,7 +3372,7 @@ class MESH_MT_calculate_crc32_submenu(bpy.types.Menu):
 	def draw(self, context):
 		layout = self.layout
 		layout.operator(MESH_OT_bp_crc32.bl_idname, icon="EVENT_B")
-		layout.operator(MESH_OT_mw_crc32.bl_idname, icon="EVENT_N")
+		layout.operator(MESH_OT_nfs_crc32.bl_idname, icon="EVENT_N")
 
 
 class MESH_MT_texture_type_identifier_submenu(bpy.types.Menu):
@@ -1898,6 +3383,7 @@ class MESH_MT_texture_type_identifier_submenu(bpy.types.Menu):
 	def draw(self, context):
 		layout = self.layout
 		#layout.operator(MESH_OT_bp_texture_type.bl_idname, icon="EVENT_B")
+		layout.operator(MESH_OT_hp_texture_type.bl_idname, icon="EVENT_N")
 		layout.operator(MESH_OT_mw_texture_type.bl_idname, icon="EVENT_N")
 
 
@@ -1908,8 +3394,7 @@ class MESH_MT_transfer_blend_data_submenu(bpy.types.Menu):
 
 	def draw(self, context):
 		layout = self.layout
-		#layout.operator(MESH_OT_bp_transfer_blend_data.bl_idname, icon="EVENT_B")
-		layout.operator(MESH_OT_mw_transfer_blend_data.bl_idname, icon="EVENT_N")
+		layout.operator(MESH_OT_transfer_blend_data.bl_idname, icon="RIGHTARROW")
 
 
 class MESH_MT_swap_ids_submenu(bpy.types.Menu):
@@ -1919,8 +3404,7 @@ class MESH_MT_swap_ids_submenu(bpy.types.Menu):
 
 	def draw(self, context):
 		layout = self.layout
-		#layout.operator(MESH_OT_bp_swap_ids.bl_idname, icon="EVENT_B")
-		layout.operator(MESH_OT_mw_swap_ids.bl_idname, icon="EVENT_N")
+		layout.operator(MESH_OT_swap_ids.bl_idname, icon="RIGHTARROW")
 
 
 """
@@ -1950,11 +3434,23 @@ class MESH_OT_mw_properties(bpy.types.Operator):
 		return status
 
 
+class MESH_OT_hp_properties(bpy.types.Operator):
+	bl_idname = "mesh.hp_properties"
+	bl_label = "Need for Speed Hot Pursuit"
+	bl_description = "Create and populate custom properties for exporting to Need for Speed Hot Pursuit"
+	
+	def execute(self, context):
+		self.report({'INFO'}, "Running add custom properties operator")
+		status = main_hp()
+		self.report({'INFO'}, "Finished")
+		return status
+
+
 @orientation_helper(axis_forward='-Y', axis_up='Z')
 class MESH_OT_mw_load_effect_driver(bpy.types.Operator):
 	bl_idname = "mesh.mw_load_effect_driver"
 	bl_label = "Need for Speed Most Wanted 2012"
-	bl_description = "Load effects and driver data from library for exporting to Need for Speed Most Wanted 2012"
+	bl_description = "Load skeleton, effects and driver data from library for exporting to Need for Speed Most Wanted 2012"
 	
 	
 	def draw(self, context):
@@ -1996,11 +3492,66 @@ class MESH_OT_mw_load_effect_driver(bpy.types.Operator):
 	
 	
 	def execute(self, context):
-		self.report({'INFO'}, "Running load effects/driver data")
+		self.report({'INFO'}, "Running load skeleton/effects/driver data")
 		
 		global_matrix = axis_conversion(from_forward='Z', from_up='Y', to_forward=self.axis_forward, to_up=self.axis_up).to_4x4()
 		
 		status = load_vehicle_data_mw(global_matrix)
+		self.report({'INFO'}, "Finished")
+		return status
+
+
+@orientation_helper(axis_forward='-Y', axis_up='Z')
+class MESH_OT_hp_load_effect_driver(bpy.types.Operator):
+	bl_idname = "mesh.hp_load_effect_driver"
+	bl_label = "Need for Speed Hot Pursuit"
+	bl_description = "Load skeleton, effects and driver data from library for exporting to Need for Speed Hot Pursuit"
+	
+	
+	def draw(self, context):
+		layout = self.layout
+		layout.use_property_split = True
+		layout.use_property_decorate = False  # No animation.
+		
+		##
+		box = layout.box()
+		split = box.split(factor=0.75)
+		col = split.column(align=True)
+		col.label(text="Blender orientation", icon="OBJECT_DATA")
+		
+		row = box.row(align=True)
+		row.label(text="Forward axis")
+		row.use_property_split = False
+		row.prop_enum(self, "axis_forward", 'X', text='X')
+		row.prop_enum(self, "axis_forward", 'Y', text='Y')
+		row.prop_enum(self, "axis_forward", 'Z', text='Z')
+		row.prop_enum(self, "axis_forward", '-X', text='-X')
+		row.prop_enum(self, "axis_forward", '-Y', text='-Y')
+		row.prop_enum(self, "axis_forward", '-Z', text='-Z')
+		
+		row = box.row(align=True)
+		row.label(text="Up axis")
+		row.use_property_split = False
+		row.prop_enum(self, "axis_up", 'X', text='X')
+		row.prop_enum(self, "axis_up", 'Y', text='Y')
+		row.prop_enum(self, "axis_up", 'Z', text='Z')
+		row.prop_enum(self, "axis_up", '-X', text='-X')
+		row.prop_enum(self, "axis_up", '-Y', text='-Y')
+		row.prop_enum(self, "axis_up", '-Z', text='-Z')
+	
+	
+	def invoke(self, context, event):
+		wm = context.window_manager
+
+		return wm.invoke_props_dialog(self, width=500)
+	
+	
+	def execute(self, context):
+		self.report({'INFO'}, "Running load skeleton/effects/driver data")
+		
+		global_matrix = axis_conversion(from_forward='Z', from_up='Y', to_forward=self.axis_forward, to_up=self.axis_up).to_4x4()
+		
+		status = load_vehicle_data_hp(global_matrix)
 		self.report({'INFO'}, "Finished")
 		return status
 
@@ -2050,9 +3601,9 @@ class MESH_OT_bp_crc32(bpy.types.Operator):
 		return status
 
 
-class MESH_OT_mw_crc32(bpy.types.Operator):
-	bl_idname = "mesh.mw_crc32"
-	bl_label = "Need for Speed Most Wanted 2012"
+class MESH_OT_nfs_crc32(bpy.types.Operator):
+	bl_idname = "mesh.nfs_crc32"
+	bl_label = "Need for Speed HP/MW"
 	bl_description = "Convert the data names to a valid resource ID"
 	
 	append_type: BoolProperty(
@@ -2090,14 +3641,14 @@ class MESH_OT_mw_crc32(bpy.types.Operator):
 	
 	def execute(self, context):
 		self.report({'INFO'}, "Running ResourceId calculator operator")
-		status = mw_convert_to_crc(self.append_type, self.append_random_int)
+		status = nfs_convert_to_crc(self.append_type, self.append_random_int)
 		self.report({'INFO'}, "Finished")
 		return status
 
 
-class MESH_OT_mw_swap_ids(bpy.types.Operator):
-	bl_idname = "mesh.mw_swap_ids"
-	bl_label = "Need for Speed Most Wanted 2012"
+class MESH_OT_swap_ids(bpy.types.Operator):
+	bl_idname = "mesh.swap_ids"
+	bl_label = "Burnout Paradise | Need for Speed HP/MW"
 	bl_description = "Convert the endianness of the resource IDs"
 	
 	ignore_hidden_meshes: BoolProperty(
@@ -2217,6 +3768,82 @@ class MESH_OT_mw_texture_type(bpy.types.Operator):
 		return status
 
 
+class MESH_OT_hp_texture_type(bpy.types.Operator):
+	bl_idname = "mesh.hp_texture_type"
+	bl_label = "Need for Speed Hot Pursuit"
+	bl_description = "Identify texture types"
+	
+	def execute(self, context):
+		self.report({'INFO'}, "Running identify texture types operator")
+		
+		sampler_types = ('NormalTextureSampler', 'DiffuseTextureSampler', 'OverlayTextureSampler', 'DiffuseSampler', 'ReflectionTextureSampler',
+						 'OffsetTextureSampler', 'IlluminanceTextureSampler', 'Diffuse2TextureSampler', 'NormalSampler', 'OverlayB_Sampler',
+						 'OverlayA_Sampler', 'ColourMap_Sampler', 'Crack_Normal_Sampler', 'DetailMap_Normal_Sampler', 'Crack_AO_Sampler',
+						 'DetailMap_Diffuse_Sampler', 'NoiseSampler', 'SpecularTextureSampler', 'MaskTextureSampler', 'Tiling3NormalSampler',
+						 'Tiling1NormalSampler', 'CliffMaskAndLightingTextureSampler', 'Tiling3TextureSampler', 'Tiling2NormalSampler',
+						 'RGBOverlayTextureSampler', 'NoiseTextureSampler', 'Tiling2TextureSampler', 'Tiling1TextureSampler', 'CliffNormalSampler',
+						 'CliffTextureSampler', 'dirtMapSampler', 'detailDiffuseMapSampler', 'detailNormalMapSampler', 'AOMapSampler',
+						 'crackNormalMapSampler', 'WindowTintSampler', 'DecalTextureSampler', 'TyreMarkTextureSampler', 'EdgeNormalMap_Sampler',
+						 'EdgeAlphaPlusAoMap_Sampler', 'Decal_Diffuse_Sampler', 'Decal_NormalPlusSpec_Sampler', 'Line_Diffuse_Sampler',
+						 'Line_NormalPlusSpec_Sampler', 'IllumTextureSampler', 'RoadBlockTextureSampler', 'SpecDepthAndRefractionTextureSampler',
+						 'SurfNormalTextureSampler', 'DiffuseAndCausticsTextureSampler', 'SurfTextureSampler', 'SurfMaskTextureSampler',
+						 'RiverFloorTextureSampler', 'NormalSpecTextureSampler', 'ProjectiveTextureSampler', 'NeonMaskTextureSampler')
+		
+		for mat in bpy.data.materials:
+			if mat.node_tree == None:
+				continue
+			
+			sampler_types_used = []
+			for node in mat.node_tree.nodes:
+				if node.type == "TEX_IMAGE":
+					if node.name in sampler_types:
+						sampler_types_used.append(node.name)
+			
+			for node in mat.node_tree.nodes:
+				if node.type == "TEX_IMAGE":
+					if node.name not in sampler_types:
+						for link in node.outputs[0].links:
+							if link.to_node.bl_idname == "ShaderNodeBsdfPrincipled":
+								if link.to_node.inputs[:].index(link.to_socket) == 0 and "DiffuseTextureSampler" not in sampler_types_used:
+									node.name = "DiffuseTextureSampler"
+									sampler_types_used.append(node.name)
+								elif link.to_node.inputs[:].index(link.to_socket) == 7 and "SpecularTextureSampler" not in sampler_types_used:
+									node.name = "SpecularTextureSampler"
+									sampler_types_used.append(node.name)
+								elif link.to_node.inputs[:].index(link.to_socket) == 22 and "NormalTextureSampler" not in sampler_types_used:
+									node.name = "NormalTextureSampler"
+									sampler_types_used.append(node.name)
+							break # ignoring other links
+			
+			for node in mat.node_tree.nodes:
+				if node.type == "TEX_IMAGE":
+					if node.name not in sampler_types:
+						if len(node.outputs[0].links) == 0:
+							if node.name.lower() == "diffuse" and "DiffuseTextureSampler" not in sampler_types_used:
+								node.name = "DiffuseTextureSampler"
+								sampler_types_used.append(node.name)
+							elif node.name.lower() == "specular" and "SpecularTextureSampler" not in sampler_types_used:
+								node.name = "SpecularTextureSampler"
+								sampler_types_used.append(node.name)
+							elif node.name.lower() == "normal" and "NormalTextureSampler" not in sampler_types_used:
+								node.name = "NormalTextureSampler"
+								sampler_types_used.append(node.name)
+							elif node.name.lower() == "crumple" and "CrumpleTextureSampler" not in sampler_types_used:
+								node.name = "CrumpleTextureSampler"
+								sampler_types_used.append(node.name)
+							elif node.name.lower() == "emissive" and "EmissiveTextureSampler" not in sampler_types_used:
+								node.name = "EmissiveTextureSampler"
+								sampler_types_used.append(node.name)
+							elif node.name.lower() == "ao" and "AmbientOcclusionTextureSampler" not in sampler_types_used:
+								node.name = "AmbientOcclusionTextureSampler"
+								sampler_types_used.append(node.name)
+		
+		status = {'FINISHED'}
+		
+		self.report({'INFO'}, "Finished")
+		return status
+
+
 def get_collections(scene, context):
 		items = []
 		for i, collection in enumerate(bpy.data.collections):
@@ -2225,9 +3852,9 @@ def get_collections(scene, context):
 		return tuple(items)
 
 
-class MESH_OT_mw_transfer_blend_data(bpy.types.Operator):
-	bl_idname = "mesh.mw_transfer_blend_data"
-	bl_label = "Need for Speed Most Wanted 2012"
+class MESH_OT_transfer_blend_data(bpy.types.Operator):
+	bl_idname = "mesh.transfer_blend_data"
+	bl_label = "Burnout Paradise | Need for Speed HP/MW"
 	bl_description = "Transfer blend indices and weight data from source objects to target objects"
 	
 	
@@ -2558,12 +4185,15 @@ register_classes = (
 		MESH_MT_transfer_blend_data_submenu,
 		MESH_OT_bp_properties,
 		MESH_OT_mw_properties,
+		MESH_OT_hp_properties,
 		MESH_OT_mw_load_effect_driver,
+		MESH_OT_hp_load_effect_driver,
 		MESH_OT_bp_crc32,
-		MESH_OT_mw_crc32,
-		MESH_OT_mw_swap_ids,
+		MESH_OT_nfs_crc32,
+		MESH_OT_swap_ids,
 		MESH_OT_mw_texture_type,
-		MESH_OT_mw_transfer_blend_data,
+		MESH_OT_hp_texture_type,
+		MESH_OT_transfer_blend_data,
 )
 
 
