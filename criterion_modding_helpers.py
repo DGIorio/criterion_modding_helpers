@@ -4,7 +4,7 @@ bl_info = {
     "name": "Criterion modding helpers",
     "description": "Helping tools for developing mods for games from Criterion Games",
     "author": "DGIorio",
-    "version": (3, 0, 1),
+    "version": (3, 1, 1),
     "blender": (3, 1, 0),
     "location": "3D View > Add > Criterion modding tools",
     "warning": "",
@@ -27,7 +27,7 @@ from bpy_extras.io_utils import (
 	orientation_helper,
 	axis_conversion,
 )
-from mathutils import Matrix, Quaternion
+from mathutils import Matrix, Vector, Quaternion
 import math #pi
 import numpy as np
 import zlib
@@ -260,41 +260,145 @@ def load_vehicle_data_mw(m):
 					Skeleton = read_skeleton_mw(skeleton_path)
 				
 				if len(Skeleton) > 0:
-					skeleton_collection = bpy.data.collections.new(vehicle_number + "_Skeleton")
-					skeleton_collection["resource_type"] = "Skeleton"
-					skeleton_collection["SkeletonID"] = mSkeletonId
-					main_collection["SkeletonID"] = mSkeletonId
-					skeleton_collection.color_tag = "COLOR_07"
-					main_collection.children.link(skeleton_collection)
+					# skeleton_collection = bpy.data.collections.new(vehicle_number + "_Skeleton")
+					# skeleton_collection["resource_type"] = "Skeleton"
+					# skeleton_collection.color_tag = "COLOR_07"
+					# main_collection.children.link(skeleton_collection)
 					
-					character_name = 0
-					for i, sensor in enumerate(Skeleton):
-						sensor_index, mSensorPosition, mSensorRotation, parent_sensor, relative_sensor, child_sensor, sensor_hash = sensor
+					# character_name = 0
+					# for i, sensor in enumerate(Skeleton):
+						# sensor_index, mSensorPosition, mSensorRotation, parent_sensor, older_sensor, child_sensor, sensor_hash = sensor
 						
-						if resource_type == "GraphicsSpec":
-							sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, int(vehicle_number))
-						elif resource_type == "CharacterSpec":
-							sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, character_name)
-						sensor_empty = bpy.data.objects.new(sensor_empty_name, None)
-						if resource_type == "GraphicsSpec":
-							sensor_empty.empty_display_type = 'SPHERE'
-							sensor_empty.empty_display_size = 0.025
-							sensor_empty.show_name = True
-							sensor_empty.show_in_front = True
-						elif resource_type == "CharacterSpec":
-							sensor_empty.empty_display_type = 'SPHERE'
-							sensor_empty.empty_display_size = 0.025
-							sensor_empty.show_name = False
-							sensor_empty.show_in_front = True
-						skeleton_collection.objects.link(sensor_empty)
+						# if resource_type == "GraphicsSpec":
+							# sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, int(vehicle_number))
+						# elif resource_type == "CharacterSpec":
+							# sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, character_name)
+						# sensor_empty = bpy.data.objects.new(sensor_empty_name, None)
+						# if resource_type == "GraphicsSpec":
+							# sensor_empty.empty_display_type = 'SPHERE'
+							# sensor_empty.empty_display_size = 0.025
+							# sensor_empty.show_name = True
+							# sensor_empty.show_in_front = True
+						# elif resource_type == "CharacterSpec":
+							# sensor_empty.empty_display_type = 'SPHERE'
+							# sensor_empty.empty_display_size = 0.025
+							# sensor_empty.show_name = False
+							# sensor_empty.show_in_front = True
+						# skeleton_collection.objects.link(sensor_empty)
 						
-						sensor_empty["parent_sensor"] = parent_sensor
-						sensor_empty["correlated_sensor"] = relative_sensor
-						sensor_empty["child_sensor"] = child_sensor
-						sensor_empty["sensor_hash"] = int_to_id(sensor_hash)
+						# sensor_empty["parent_sensor"] = parent_sensor
+						# sensor_empty["correlated_sensor"] = older_sensor
+						# sensor_empty["child_sensor"] = child_sensor
+						# sensor_empty["sensor_hash"] = int_to_id(sensor_hash)
 						
-						mTransform = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [*mSensorPosition, 1.0]]).transposed()
-						sensor_empty.matrix_world = m @ mTransform
+						# mTransform = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [*mSensorPosition, 1.0]]).transposed()
+						# sensor_empty.matrix_world = m @ mTransform
+					
+					skeleton_collection2 = bpy.data.collections.new(vehicle_number + "_Skeleton")
+					skeleton_collection2["resource_type"] = "Skeleton"
+					skeleton_collection2.color_tag = "COLOR_07"
+					main_collection.children.link(skeleton_collection2)
+					
+					armature_created = False
+					try:
+						cm_armature_rig = bpy.context.scene.objects[mSkeletonId]
+						armature_created = True
+					except:
+						cm_armature = bpy.data.armatures.new(mSkeletonId)
+						cm_armature_rig = bpy.data.objects.new(mSkeletonId, cm_armature)
+					
+					skeleton_collection2.objects.link(cm_armature_rig)
+					bpy.context.view_layer.objects.active = cm_armature_rig
+					bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+					edit_bones = cm_armature_rig.data.edit_bones
+					
+					skeleton_method = "hinges"
+					if skeleton_method == "joints":
+						for i, sensor in enumerate(Skeleton):
+							sensor_index, mSensorPosition, mSensorRotation, parent_sensor, older_sensor, child_sensor, has_ik, sensor_hash = sensor
+							sensor_Transform = Matrix.LocRotScale(mSensorPosition, Quaternion([mSensorRotation[3], mSensorRotation[0], mSensorRotation[1], mSensorRotation[2]]), None)
+							
+							cm_bone_name = "Sensor_%03d" % sensor_index
+							b = edit_bones.new(cm_bone_name)
+							b.head = mSensorPosition
+							#b.tail = mSensorPosition
+							
+							if parent_sensor != -1:
+								b.parent = edit_bones["Sensor_%03d" % parent_sensor]
+								b.use_connect = False
+								#b.use_connect = True
+								
+								for sensor_ in Skeleton:
+									if sensor_[0] == parent_sensor:
+										#b.head = sensor_[1]
+										b.tail = sensor_[1]
+										break
+							
+							tail, roll = mat3_to_vec_roll(sensor_Transform.to_3x3())
+							b.roll = roll
+							
+							if b.length < 1e-3:
+								b.tail = b.head + Vector([0.0, 0.0, 0.12])
+								#b.head = b.tail + Vector([0.0, 0.0, 0.12])
+							b["hash"] = int_to_id(sensor_hash)
+							if has_ik == True:
+								b["has_ik"] = has_ik
+					
+					elif skeleton_method == "hinges":
+						for i, sensor in enumerate(Skeleton):
+							sensor_index, mSensorPosition, mSensorRotation, parent_sensor, older_sensor, child_sensor, has_ik, sensor_hash = sensor
+							quat_a = Quaternion([mSensorRotation[3], mSensorRotation[0], mSensorRotation[1], mSensorRotation[2]])
+							sensor_Transform = Matrix.LocRotScale(mSensorPosition, quat_a, None)
+							
+							if quat_a[0] < 0:
+								bone_direction = Vector((-1.0, -1.0, -1.0))
+							else:
+								bone_direction = Vector((1.0, 1.0, 1.0))
+							
+							cm_bone_name = "Sensor_%03d" % sensor_index
+							b = edit_bones.new(cm_bone_name)
+							b.head = mSensorPosition
+							
+							if parent_sensor != -1:
+								b.parent = edit_bones["Sensor_%03d" % parent_sensor]
+								b.use_connect = False
+								#b.use_connect = True
+							
+							#tail, roll = mat3_to_vec_roll(sensor_Transform.to_3x3())
+							
+							boneLength = 0.2
+							b.tail = Vector(sensor_Transform.col[1][0:3])*bone_direction*boneLength + b.head
+							#b.roll = roll
+							
+							if b.length < 1e-3:
+								b.tail = b.head + Vector([0.0, 0.0, 0.12])
+								#b.head = b.tail + Vector([0.0, 0.0, 0.12])
+							b["hash"] = int_to_id(sensor_hash)
+							if has_ik == True:
+								b["has_ik"] = has_ik
+					
+					bpy.ops.object.mode_set(mode='OBJECT')	
+					mTransform = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]).transposed()
+					cm_armature_rig.matrix_world = m @ mTransform
+					cm_armature.display_type = 'WIRE'
+					#cm_armature.show_names = True
+					cm_armature.show_bone_custom_shapes = True
+					cm_armature_rig.show_in_front = True
+					
+					# Bone shape
+					try:
+						bone_sphere = bpy.data.objects["dgi_sphere_skeleton"]
+					except:
+						bone_sphere = create_sphere(name="dgi_sphere_skeleton", radius=0.025)
+						bone_sphere.use_fake_user = True
+					
+					for b in cm_armature_rig.pose.bones:
+						b.custom_shape = bone_sphere
+						b.use_custom_shape_bone_size = False
+					
+					#for renderable_object in renderable_objects:
+					#	modifier = renderable_object.modifiers.new(name=mSkeletonId, type='ARMATURE')
+					#	modifier.object = cm_armature_rig
 			
 			if "Effects" in collections_types:
 				pass
@@ -450,7 +554,6 @@ def read_effects_graphicsspec(graphicsspec_path):
 				instances_effects.append([EffectsId, i, j, effectLocation[:], EffectData[:]])
 			
 			instances_effects2.append([EffectsId, i, effectsLocation[:], EffectData[:]])
-			
 	
 	return (instances_effects, instances_effects2)
 
@@ -530,41 +633,137 @@ def load_vehicle_data_hp(m):
 					Skeleton = read_skeleton_hp(skeleton_path, resource_version)
 				
 				if len(Skeleton) > 0:
-					skeleton_collection = bpy.data.collections.new(vehicle_number + "_Skeleton")
-					skeleton_collection["resource_type"] = "Skeleton"
-					skeleton_collection["SkeletonID"] = mSkeletonId
-					main_collection["SkeletonID"] = mSkeletonId
-					skeleton_collection.color_tag = "COLOR_07"
-					main_collection.children.link(skeleton_collection)
+					# skeleton_collection = bpy.data.collections.new(vehicle_number + "_Skeleton")
+					# skeleton_collection["resource_type"] = "Skeleton"
+					# skeleton_collection["SkeletonID"] = mSkeletonId
+					# main_collection["SkeletonID"] = mSkeletonId
+					# skeleton_collection.color_tag = "COLOR_07"
+					# main_collection.children.link(skeleton_collection)
 					
-					character_name = 0
-					for i, sensor in enumerate(Skeleton):
-						sensor_index, mSensorPosition, mSensorRotation, parent_sensor, relative_sensor, child_sensor, sensor_hash = sensor
+					# character_name = 0
+					# for i, sensor in enumerate(Skeleton):
+						# sensor_index, mSensorPosition, mSensorRotation, parent_sensor, older_sensor, child_sensor, sensor_hash = sensor
 						
-						if resource_type == "GraphicsSpec":
-							sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, int(vehicle_number))
-						elif resource_type == "CharacterSpec":
-							sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, character_name)
-						sensor_empty = bpy.data.objects.new(sensor_empty_name, None)
-						if resource_type == "GraphicsSpec":
-							sensor_empty.empty_display_type = 'SPHERE'
-							sensor_empty.empty_display_size = 0.025
-							sensor_empty.show_name = True
-							sensor_empty.show_in_front = True
-						elif resource_type == "CharacterSpec":
-							sensor_empty.empty_display_type = 'SPHERE'
-							sensor_empty.empty_display_size = 0.025
-							sensor_empty.show_name = False
-							sensor_empty.show_in_front = True
-						skeleton_collection.objects.link(sensor_empty)
+						# if resource_type == "GraphicsSpec":
+							# sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, int(vehicle_number))
+						# elif resource_type == "CharacterSpec":
+							# sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, character_name)
+						# sensor_empty = bpy.data.objects.new(sensor_empty_name, None)
+						# if resource_type == "GraphicsSpec":
+							# sensor_empty.empty_display_type = 'SPHERE'
+							# sensor_empty.empty_display_size = 0.025
+							# sensor_empty.show_name = True
+							# sensor_empty.show_in_front = True
+						# elif resource_type == "CharacterSpec":
+							# sensor_empty.empty_display_type = 'SPHERE'
+							# sensor_empty.empty_display_size = 0.025
+							# sensor_empty.show_name = False
+							# sensor_empty.show_in_front = True
+						# skeleton_collection.objects.link(sensor_empty)
 						
-						sensor_empty["parent_sensor"] = parent_sensor
-						sensor_empty["correlated_sensor"] = relative_sensor
-						sensor_empty["child_sensor"] = child_sensor
-						sensor_empty["sensor_hash"] = int_to_id(sensor_hash)
+						# sensor_empty["parent_sensor"] = parent_sensor
+						# sensor_empty["correlated_sensor"] = older_sensor
+						# sensor_empty["child_sensor"] = child_sensor
+						# sensor_empty["sensor_hash"] = int_to_id(sensor_hash)
 						
-						mTransform = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [*mSensorPosition, 1.0]]).transposed()
-						sensor_empty.matrix_world = m @ mTransform
+						# mTransform = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [*mSensorPosition, 1.0]]).transposed()
+						# sensor_empty.matrix_world = m @ mTransform
+					
+					skeleton_collection2 = bpy.data.collections.new(vehicle_number + "_Skeleton")
+					skeleton_collection2["resource_type"] = "Skeleton"
+					skeleton_collection2.color_tag = "COLOR_07"
+					main_collection.children.link(skeleton_collection2)
+					
+					armature_created = False
+					try:
+						cm_armature_rig = bpy.context.scene.objects[mSkeletonId]
+						armature_created = True
+					except:
+						cm_armature = bpy.data.armatures.new(mSkeletonId)
+						cm_armature_rig = bpy.data.objects.new(mSkeletonId, cm_armature)
+					
+					skeleton_collection2.objects.link(cm_armature_rig)
+					bpy.context.view_layer.objects.active = cm_armature_rig
+					bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+					edit_bones = cm_armature_rig.data.edit_bones
+					
+					skeleton_method = "hinges"
+					if skeleton_method == "joints":
+						for i, sensor in enumerate(Skeleton):
+							sensor_index, mSensorPosition, mSensorRotation, parent_sensor, older_sensor, child_sensor, has_ik, sensor_hash = sensor
+							
+							cm_bone_name = "Sensor_%03d" % sensor_index
+							b = edit_bones.new(cm_bone_name)
+							b.head = mSensorPosition
+							#b.tail = mSensorPosition
+							
+							if parent_sensor != -1:
+								b.parent = edit_bones["Sensor_%03d" % parent_sensor]
+								b.use_connect = False
+								#b.use_connect = True
+								
+								for sensor_ in Skeleton:
+									if sensor_[0] == parent_sensor:
+										#b.head = sensor_[1]
+										b.tail = sensor_[1]
+										break
+							
+							if b.length < 1e-3:
+								b.tail = b.head + Vector([0.0, 0.0, 0.12])
+								#b.head = b.tail + Vector([0.0, 0.0, 0.12])
+							b["hash"] = int_to_id(sensor_hash)
+							if has_ik == True:
+								b["has_ik"] = has_ik
+					
+					elif skeleton_method == "hinges":
+						for i, sensor in enumerate(Skeleton):
+							sensor_index, mSensorPosition, mSensorRotation, parent_sensor, older_sensor, child_sensor, has_ik, sensor_hash = sensor
+							
+							cm_bone_name = "Sensor_%03d" % sensor_index
+							b = edit_bones.new(cm_bone_name)
+							b.head = mSensorPosition
+							
+							if parent_sensor != -1:
+								b.parent = edit_bones["Sensor_%03d" % parent_sensor]
+								b.use_connect = False
+								#b.use_connect = True
+								
+								b.tail = Vector(mSensorPosition) + Vector([0.0, 0.2, 0.0])
+								
+								#for sensor_ in Skeleton:
+								#	if sensor_[0] == parent_sensor:
+								#		b.tail = Vector(mSensorPosition) + Vector([0.0, 0.2, 0.0])
+								#		break
+							
+							if b.length < 1e-3:
+								b.tail = b.head + Vector([0.0, 0.0, 0.12])
+								#b.head = b.tail + Vector([0.0, 0.0, 0.12])
+							b["hash"] = int_to_id(sensor_hash)
+							if has_ik == True:
+								b["has_ik"] = has_ik
+					
+					bpy.ops.object.mode_set(mode='OBJECT')
+					mTransform = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]).transposed()
+					cm_armature_rig.matrix_world = m @ mTransform
+					cm_armature.display_type = 'WIRE'
+					#cm_armature.show_names = True
+					cm_armature.show_bone_custom_shapes = True
+					cm_armature_rig.show_in_front = True
+					
+					# Bone shape
+					try:
+						bone_sphere = bpy.data.objects["dgi_sphere_skeleton"]
+					except:
+						bone_sphere = create_sphere(name="dgi_sphere_skeleton", radius=0.025)
+						bone_sphere.use_fake_user = True
+					
+					for b in cm_armature_rig.pose.bones:
+						b.custom_shape = bone_sphere
+						b.use_custom_shape_bone_size = False
+					
+					#for renderable_object in renderable_objects:
+					#	modifier = renderable_object.modifiers.new(name=mSkeletonId, type='ARMATURE')
+					#	modifier.object = cm_armature_rig
 			
 			if "Effects" in collections_types:
 				pass
@@ -737,10 +936,9 @@ def read_graphicsspec_mw(graphicsspec_path):
 		null_0x4 = struct.unpack("<I", f.read(0x4))[0]
 		null_0x8 = struct.unpack("<I", f.read(0x4))[0]
 		mpWheelsData = struct.unpack("<I", f.read(0x4))[0]
-		muPartsCount = struct.unpack("<B", f.read(0x1))[0]
-		unknown_0x11 = struct.unpack("<B", f.read(0x1))[0]
+		muPartsCount = struct.unpack("<H", f.read(0x2))[0]
 		unknown_0x12 = struct.unpack("<B", f.read(0x1))[0]
-		unknown_0x13 = struct.unpack("<B", f.read(0x1))[0]
+		num_wheels = struct.unpack("<B", f.read(0x1))[0]
 		num_behaviours = struct.unpack("<I", f.read(0x4))[0]
 		mppBehaviour = struct.unpack("<I", f.read(0x4))[0]
 		num_effects = struct.unpack("<I", f.read(0x4))[0]
@@ -755,7 +953,7 @@ def read_graphicsspec_mw(graphicsspec_path):
 		object_placements = []
 		wheel_transforms = []
 		is_spinnables = []
-		for i in range(0, 4):
+		for i in range(0, num_wheels):
 			mWheelOffset = list(struct.unpack("<4f", f.read(0x10)))
 			mWheelRotation = struct.unpack("<4f", f.read(0x10))
 			mWheelScale = struct.unpack("<4f", f.read(0x10))
@@ -847,7 +1045,7 @@ def read_graphicsspec_mw(graphicsspec_path):
 			instances.append([mModelId])
 		
 		f.seek(-0x10 * sum(mNumWheelParts), 2)
-		for i in range(0, 4):
+		for i in range(0, num_wheels):
 			for j in range(0, mNumWheelParts[i]):
 				mModelId = bytes_to_id(f.read(0x4))
 				_ = struct.unpack("<i", f.read(0x4))[0]
@@ -881,7 +1079,7 @@ def read_graphicsspec_hp(graphicsspec_path, resource_version):
 		mpWheelsData = struct.unpack(data_format[0], f.read(data_format[1]))[0]
 		muPartsCount = struct.unpack("<H", f.read(0x2))[0]
 		unknown_0x12 = struct.unpack("<B", f.read(0x1))[0]
-		unknown_0x13 = struct.unpack("<B", f.read(0x1))[0]
+		num_wheels = struct.unpack("<B", f.read(0x1))[0]
 		num_behaviours = struct.unpack("<I", f.read(0x4))[0]
 		mppBehaviour = struct.unpack(data_format[0], f.read(data_format[1]))[0]
 		num_effects = struct.unpack("<I", f.read(0x4))[0]
@@ -898,7 +1096,7 @@ def read_graphicsspec_hp(graphicsspec_path, resource_version):
 		object_placements = []
 		wheel_transforms = []
 		is_spinnables = []
-		for i in range(0, 4):
+		for i in range(0, num_wheels):
 			mpWheelAllocateSpace.append(struct.unpack(data_format[0], f.read(data_format[1]))[0])
 			spinnable_models = struct.unpack("<I", f.read(0x4))[0]			
 			mNumWheelParts.append(struct.unpack("<H", f.read(0x2))[0])
@@ -996,7 +1194,7 @@ def read_graphicsspec_hp(graphicsspec_path, resource_version):
 			instances.append([mModelId])
 		
 		f.seek(-0x10 * sum(mNumWheelParts), 2)
-		for i in range(0, 4):
+		for i in range(0, num_wheels):
 			for j in range(0, mNumWheelParts[i]):
 				mModelId = bytes_to_id(f.read(0x4))
 				_ = struct.unpack("<i", f.read(0x4))[0]
@@ -1019,6 +1217,14 @@ def read_skeleton_mw(skeleton_path):
 		mppPointer = struct.unpack("<I", f.read(0x4))[0]
 		mppPointer2 = struct.unpack("<I", f.read(0x4))[0]
 		mppPointer3 = struct.unpack("<I", f.read(0x4))[0]
+		miNumberOfIKParts = struct.unpack("<H", f.read(0x2))[0]
+		
+		miIkParts = []
+		if miNumberOfIKParts != 0:
+			f.seek(mppPointer2, 0)
+			for i in range(0, miNumberOfIKParts):
+				miIkPartIndex = struct.unpack("<i", f.read(0x4))[0]
+				miIkParts.append(miIkPartIndex)
 		
 		f.seek(mppPointer, 0)
 		for i in range(0, muCount):
@@ -1027,11 +1233,13 @@ def read_skeleton_mw(skeleton_path):
 			padding = f.read(0x4)
 			rotation = struct.unpack("<ffff", f.read(0x10))
 			parent_sensor = struct.unpack("<i", f.read(0x4))[0]
-			relative_sensor = struct.unpack("<i", f.read(0x4))[0]
+			older_sensor = struct.unpack("<i", f.read(0x4))[0]
 			child_sensor = struct.unpack("<i", f.read(0x4))[0]
 			sensor_index = struct.unpack("<i", f.read(0x4))[0]
 			
-			Skeleton.append([sensor_index, location, rotation, parent_sensor, relative_sensor, child_sensor])
+			has_ik = sensor_index in miIkParts
+			
+			Skeleton.append([sensor_index, location, rotation, parent_sensor, older_sensor, child_sensor, has_ik])
 		
 		f.seek(mppPointer3, 0)
 		for i in range(0, muCount):
@@ -1061,11 +1269,13 @@ def read_skeleton_hp(skeleton_path, resource_version):
 			padding = f.read(0x4)
 			rotation = []
 			parent_sensor = struct.unpack("<i", f.read(0x4))[0]
-			relative_sensor = struct.unpack("<i", f.read(0x4))[0]
+			older_sensor = struct.unpack("<i", f.read(0x4))[0]
 			child_sensor = struct.unpack("<i", f.read(0x4))[0]
 			sensor_index = struct.unpack("<i", f.read(0x4))[0]
 			
-			Skeleton.append([sensor_index, location, rotation, parent_sensor, relative_sensor, child_sensor])
+			has_ik = False
+			
+			Skeleton.append([sensor_index, location, rotation, parent_sensor, older_sensor, child_sensor, has_ik])
 		
 		f.seek(mppPointer3, 0)
 		for i in range(0, muCount):
@@ -1219,6 +1429,8 @@ def read_shader_mw(shader_path):
 		f.seek(0x2, 1)
 		shader_parameters_names_pointer = struct.unpack("<i", f.read(0x4))[0]
 		shader_parameters_end_pointer = struct.unpack("<i", f.read(0x4))[0]
+		if shader_parameters_end_pointer == 0:
+			shader_parameters_end_pointer = end_sampler_types_offset
 		
 		f.seek(shader_parameters_indices_pointer, 0)
 		shader_parameters_Indices = list(struct.unpack("<%db" % num_shader_parameters, f.read(0x1*num_shader_parameters)))
@@ -3230,6 +3442,22 @@ def nfs_convert_to_crc(append_type=True, append_random_int=True):
 	return {'FINISHED'}
 
 
+def create_sphere(name="dgi_sphere", radius=1.0):
+	# Create an empty mesh and the object.
+	me_ob = bpy.data.meshes.new(name)
+	obj = bpy.data.objects.new(name, me_ob)
+
+	# Construct the bmesh sphere and assign it to the blender mesh.
+	bm = bmesh.new()
+	bmesh.ops.create_uvsphere(bm, u_segments=16, v_segments=8, radius=radius)
+	for f in bm.faces:
+		f.smooth = True
+	bm.to_mesh(me_ob)
+	bm.free()
+	
+	return obj
+
+
 def parse_name(object):
 	object_name = object.name
 	
@@ -3288,6 +3516,64 @@ def calculate_resourceid(resource_name):
 	ID = ID[2:].upper().zfill(8)
 	ID = '_'.join([ID[::-1][x:x+2][::-1] for x in range(0, len(ID), 2)])
 	return ID
+
+
+def vec_roll_to_mat3(vec, roll):
+	#https://blender.stackexchange.com/questions/9318/set-a-bones-matrix-to-a-custom-matrix/90240#90240
+	#port of the updated C function from armature.c
+	#https://developer.blender.org/T39470
+	#note that C accesses columns first, so all matrix indices are swapped compared to the C version
+	
+	nor = vec.normalized()
+	THETA_THRESHOLD_NEGY = 1.0e-9
+	THETA_THRESHOLD_NEGY_CLOSE = 1.0e-5
+	
+	#create a 3x3 matrix
+	bMatrix = Matrix().to_3x3()
+	
+	theta = 1.0 + nor[1];
+	
+	if (theta > THETA_THRESHOLD_NEGY_CLOSE) or ((nor[0] or nor[2]) and theta > THETA_THRESHOLD_NEGY):
+
+		bMatrix[1][0] = -nor[0];
+		bMatrix[0][1] = nor[0];
+		bMatrix[1][1] = nor[1];
+		bMatrix[2][1] = nor[2];
+		bMatrix[1][2] = -nor[2];
+		if theta > THETA_THRESHOLD_NEGY_CLOSE:
+			#If nor is far enough from -Y, apply the general case.
+			bMatrix[0][0] = 1 - nor[0] * nor[0] / theta;
+			bMatrix[2][2] = 1 - nor[2] * nor[2] / theta;
+			bMatrix[0][2] = bMatrix[2][0] = -nor[0] * nor[2] / theta;
+		
+		else:
+			#If nor is too close to -Y, apply the special case.
+			theta = nor[0] * nor[0] + nor[2] * nor[2];
+			bMatrix[0][0] = (nor[0] + nor[2]) * (nor[0] - nor[2]) / -theta;
+			bMatrix[2][2] = -bMatrix[0][0];
+			bMatrix[0][2] = bMatrix[2][0] = 2.0 * nor[0] * nor[2] / theta;
+	
+	else:
+		#If nor is -Y, simple symmetry by Z axis.
+		bMatrix = Matrix().to_3x3()
+		bMatrix[0][0] = bMatrix[1][1] = -1.0;
+	
+	#Make Roll matrix
+	rMatrix = Matrix.Rotation(roll, 3, nor)
+	
+	#Combine and output result
+	mat = rMatrix * bMatrix
+	return mat
+
+
+def mat3_to_vec_roll(mat):
+	#https://blender.stackexchange.com/questions/9318/set-a-bones-matrix-to-a-custom-matrix/90240#90240
+    vec = mat.col[1]
+    vecmat = vec_roll_to_mat3(mat.col[1], 0)
+    vecmatinv = vecmat.inverted()
+    rollmat = vecmatinv * mat
+    roll = math.atan2(rollmat[0][2], rollmat[2][2])
+    return vec, roll
 
 
 def BurnoutLibraryGet():
