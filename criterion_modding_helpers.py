@@ -4,7 +4,7 @@ bl_info = {
     "name": "Criterion modding helpers",
     "description": "Helping tools for developing mods for games from Criterion Games",
     "author": "DGIorio",
-    "version": (3, 1, 1),
+    "version": (3, 1, 2),
     "blender": (3, 1, 0),
     "location": "3D View > Add > Criterion modding tools",
     "warning": "",
@@ -3075,6 +3075,9 @@ def bp_convert_to_crc(append_type=True, append_random_int=True):
 	
 	## Processing scene
 	for object in bpy.data.objects:
+		if object.users_collection == ():
+			continue
+		
 		collection = object.users_collection[0]
 		try:
 			resource_type = collection["resource_type"]
@@ -3288,6 +3291,9 @@ def nfs_convert_to_crc(append_type=True, append_random_int=True):
 	
 	## Processing scene
 	for object in bpy.data.objects:
+		if object.users_collection == ():
+			continue
+		
 		collection = object.users_collection[0]
 		try:
 			resource_type = collection["resource_type"]
@@ -4325,6 +4331,9 @@ def mw_swap_ids(ignore_hidden_meshes):
 	
 	## Processing scene
 	for object in bpy.data.objects:
+		if object.users_collection == ():
+			continue
+		
 		if object.hide_get() == True and ignore_hidden_meshes == True:
 			continue
 		
