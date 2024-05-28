@@ -4,7 +4,7 @@ bl_info = {
     "name": "Criterion modding helpers",
     "description": "Helping tools for developing mods for games from Criterion Games",
     "author": "DGIorio",
-    "version": (3, 1, 2),
+    "version": (3, 2, 0),
     "blender": (3, 1, 0),
     "location": "3D View > Add > Criterion modding tools",
     "warning": "",
@@ -260,40 +260,6 @@ def load_vehicle_data_mw(m):
 					Skeleton = read_skeleton_mw(skeleton_path)
 				
 				if len(Skeleton) > 0:
-					# skeleton_collection = bpy.data.collections.new(vehicle_number + "_Skeleton")
-					# skeleton_collection["resource_type"] = "Skeleton"
-					# skeleton_collection.color_tag = "COLOR_07"
-					# main_collection.children.link(skeleton_collection)
-					
-					# character_name = 0
-					# for i, sensor in enumerate(Skeleton):
-						# sensor_index, mSensorPosition, mSensorRotation, parent_sensor, older_sensor, child_sensor, sensor_hash = sensor
-						
-						# if resource_type == "GraphicsSpec":
-							# sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, int(vehicle_number))
-						# elif resource_type == "CharacterSpec":
-							# sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, character_name)
-						# sensor_empty = bpy.data.objects.new(sensor_empty_name, None)
-						# if resource_type == "GraphicsSpec":
-							# sensor_empty.empty_display_type = 'SPHERE'
-							# sensor_empty.empty_display_size = 0.025
-							# sensor_empty.show_name = True
-							# sensor_empty.show_in_front = True
-						# elif resource_type == "CharacterSpec":
-							# sensor_empty.empty_display_type = 'SPHERE'
-							# sensor_empty.empty_display_size = 0.025
-							# sensor_empty.show_name = False
-							# sensor_empty.show_in_front = True
-						# skeleton_collection.objects.link(sensor_empty)
-						
-						# sensor_empty["parent_sensor"] = parent_sensor
-						# sensor_empty["correlated_sensor"] = older_sensor
-						# sensor_empty["child_sensor"] = child_sensor
-						# sensor_empty["sensor_hash"] = int_to_id(sensor_hash)
-						
-						# mTransform = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [*mSensorPosition, 1.0]]).transposed()
-						# sensor_empty.matrix_world = m @ mTransform
-					
 					skeleton_collection2 = bpy.data.collections.new(vehicle_number + "_Skeleton")
 					skeleton_collection2["resource_type"] = "Skeleton"
 					skeleton_collection2.color_tag = "COLOR_07"
@@ -380,9 +346,10 @@ def load_vehicle_data_mw(m):
 					bpy.ops.object.mode_set(mode='OBJECT')	
 					mTransform = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]).transposed()
 					cm_armature_rig.matrix_world = m @ mTransform
-					cm_armature.display_type = 'WIRE'
-					#cm_armature.show_names = True
-					cm_armature.show_bone_custom_shapes = True
+					if armature_created == False:
+						cm_armature.display_type = 'WIRE'
+						#cm_armature.show_names = True
+						cm_armature.show_bone_custom_shapes = True
 					cm_armature_rig.show_in_front = True
 					
 					# Bone shape
@@ -469,6 +436,7 @@ def load_vehicle_data_mw(m):
 				driver_empty["CharacterSpecID"] = mCharacterSpecID
 				character_collection.objects.link(driver_empty)
 				
+				armature_object = None
 				if os.path.isfile(characterLibrary) == True:
 					with bpy.data.libraries.load(characterLibrary, link=False) as (data_from, data_to):
 						data_to.collections = [col for col in data_from.collections if col.startswith(str(mCharacterSpecID))]
@@ -478,15 +446,27 @@ def load_vehicle_data_mw(m):
 					for library_collection in data_to.collections:
 						driver_objects = library_collection.objects
 						for driver_object in driver_objects:
-							for child in driver_object.children:
-								if child["renderable_index"] == 0:
-									child.parent = driver_empty
-									character_collection.objects.link(child)
-									break
+							if driver_object.type == "ARMATURE":
+								character_collection.objects.link(driver_object)
+								mLocatorMatrix = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [*characterOffset, 1.0]]).transposed()
+								driver_object.matrix_world = m @ mLocatorMatrix
+								driver_object.hide_set(True)
+								armature_object = driver_object
+								armature_matrix = mLocatorMatrix
+							else:
+								for child in driver_object.children:
+									if child["renderable_index"] == 0:
+										child.parent = driver_empty
+										character_collection.objects.link(child)
+										break
 				
 				mLocatorMatrix = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [*characterOffset, 1.0]]).transposed()
 				
 				driver_empty.matrix_world = m @ mLocatorMatrix
+				
+				if armature_object != None:
+					armature_object.parent = driver_empty
+					armature_object.matrix_world = m @ armature_matrix
 	
 	return {'FINISHED'}
 
@@ -614,6 +594,7 @@ def load_vehicle_data_hp(m):
 			collections = [graphicsspec_collection,]
 			
 			vehicle_dir = os.path.join(shared_vehicles_dir, vehicle_name)
+			controlmesh_dir = os.path.join(vehicle_dir, "ControlMesh")
 			skeleton_dir = os.path.join(vehicle_dir, "Skeleton")
 			genesyinstance_dir = os.path.join(vehicle_dir, "GenesysInstance")
 			graphicsspec_dir = os.path.join(vehicle_dir, "GraphicsSpec")
@@ -633,42 +614,6 @@ def load_vehicle_data_hp(m):
 					Skeleton = read_skeleton_hp(skeleton_path, resource_version)
 				
 				if len(Skeleton) > 0:
-					# skeleton_collection = bpy.data.collections.new(vehicle_number + "_Skeleton")
-					# skeleton_collection["resource_type"] = "Skeleton"
-					# skeleton_collection["SkeletonID"] = mSkeletonId
-					# main_collection["SkeletonID"] = mSkeletonId
-					# skeleton_collection.color_tag = "COLOR_07"
-					# main_collection.children.link(skeleton_collection)
-					
-					# character_name = 0
-					# for i, sensor in enumerate(Skeleton):
-						# sensor_index, mSensorPosition, mSensorRotation, parent_sensor, older_sensor, child_sensor, sensor_hash = sensor
-						
-						# if resource_type == "GraphicsSpec":
-							# sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, int(vehicle_number))
-						# elif resource_type == "CharacterSpec":
-							# sensor_empty_name = "Sensor_%03d.%03d" % (sensor_index, character_name)
-						# sensor_empty = bpy.data.objects.new(sensor_empty_name, None)
-						# if resource_type == "GraphicsSpec":
-							# sensor_empty.empty_display_type = 'SPHERE'
-							# sensor_empty.empty_display_size = 0.025
-							# sensor_empty.show_name = True
-							# sensor_empty.show_in_front = True
-						# elif resource_type == "CharacterSpec":
-							# sensor_empty.empty_display_type = 'SPHERE'
-							# sensor_empty.empty_display_size = 0.025
-							# sensor_empty.show_name = False
-							# sensor_empty.show_in_front = True
-						# skeleton_collection.objects.link(sensor_empty)
-						
-						# sensor_empty["parent_sensor"] = parent_sensor
-						# sensor_empty["correlated_sensor"] = older_sensor
-						# sensor_empty["child_sensor"] = child_sensor
-						# sensor_empty["sensor_hash"] = int_to_id(sensor_hash)
-						
-						# mTransform = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [*mSensorPosition, 1.0]]).transposed()
-						# sensor_empty.matrix_world = m @ mTransform
-					
 					skeleton_collection2 = bpy.data.collections.new(vehicle_number + "_Skeleton")
 					skeleton_collection2["resource_type"] = "Skeleton"
 					skeleton_collection2.color_tag = "COLOR_07"
@@ -745,9 +690,10 @@ def load_vehicle_data_hp(m):
 					bpy.ops.object.mode_set(mode='OBJECT')
 					mTransform = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]).transposed()
 					cm_armature_rig.matrix_world = m @ mTransform
-					cm_armature.display_type = 'WIRE'
-					#cm_armature.show_names = True
-					cm_armature.show_bone_custom_shapes = True
+					if armature_created == False:
+						cm_armature.display_type = 'WIRE'
+						#cm_armature.show_names = True
+						cm_armature.show_bone_custom_shapes = True
 					cm_armature_rig.show_in_front = True
 					
 					# Bone shape
@@ -763,6 +709,71 @@ def load_vehicle_data_hp(m):
 					
 					#for renderable_object in renderable_objects:
 					#	modifier = renderable_object.modifiers.new(name=mSkeletonId, type='ARMATURE')
+					#	modifier.object = cm_armature_rig
+			
+			if "ControlMesh" in collections_types:
+				pass
+			else:
+				_, _, _, _, mControlMeshId = read_graphicsspec_hp(graphicsspec_path, resource_version)
+				controlmesh_path = os.path.join(controlmesh_dir, mControlMeshId + "_16.dat")
+				ControlMeshes = []
+				if os.path.isfile(controlmesh_path) == True:
+					ControlMeshes = read_controlmesh(controlmesh_path)
+				
+				if len(ControlMeshes) > 0:
+					controlmesh_collection = bpy.data.collections.new(vehicle_number + "_ControlMesh")
+					controlmesh_collection["resource_type"] = "ControlMesh"
+					controlmesh_collection.color_tag = "COLOR_08"
+					main_collection.children.link(controlmesh_collection)
+					
+					armature_created = False
+					try:
+						cm_armature_rig = bpy.context.scene.objects[mControlMeshId]
+						armature_created = True
+					except:
+						cm_armature = bpy.data.armatures.new(mControlMeshId)
+						cm_armature_rig = bpy.data.objects.new(mControlMeshId, cm_armature)
+					
+					controlmesh_collection.objects.link(cm_armature_rig)
+					bpy.context.view_layer.objects.active = cm_armature_rig
+					bpy.ops.object.mode_set(mode='EDIT', toggle=False)
+					edit_bones = cm_armature_rig.data.edit_bones
+					
+					for i, ControlMesh in enumerate(ControlMeshes):
+						cm_index, cm_coordinates_A, cm_coordinates_B, cm_limit = ControlMesh
+						#cm_bone_name = "ControlMesh_%03d.%03d" % (cm_index, vehicle_name)
+						cm_bone_name = "Bone_%03d" % cm_index
+						b = edit_bones.new(cm_bone_name)
+						b.head = cm_coordinates_A
+						b.tail = cm_coordinates_B
+						
+						if b.length < 1e-3:
+							b.tail = b.head + Vector([0.0, 0.0, 0.12])
+						
+						b["Limit"] = cm_limit
+					
+					bpy.ops.object.mode_set(mode='OBJECT')	
+					mTransform = Matrix([[1.0, 0.0, 0.0, 0.0], [0.0, 1.0, 0.0, 0.0], [0.0, 0.0, 1.0, 0.0], [0.0, 0.0, 0.0, 1.0]]).transposed()
+					cm_armature_rig.matrix_world = m @ mTransform
+					if armature_created == False:
+						cm_armature.display_type = 'WIRE'
+						#cm_armature.show_names = True
+						cm_armature.show_bone_custom_shapes = True
+					cm_armature_rig.show_in_front = True
+					
+					# Bone shape
+					try:
+						bone_sphere = bpy.data.objects["dgi_sphere_controlmesh"]
+					except:
+						bone_sphere = create_sphere(name="dgi_sphere_controlmesh", radius=0.025)
+						bone_sphere.use_fake_user = True
+					
+					for b in cm_armature_rig.pose.bones:
+						b.custom_shape = bone_sphere
+						b.use_custom_shape_bone_size = False
+					
+					#for renderable_object in renderable_objects:
+					#	modifier = renderable_object.modifiers.new(name=mControlMeshId, type='ARMATURE')
 					#	modifier.object = cm_armature_rig
 			
 			if "Effects" in collections_types:
@@ -1283,6 +1294,37 @@ def read_skeleton_hp(skeleton_path, resource_version):
 			Skeleton[i].append(hash)
 	
 	return Skeleton
+
+
+def read_controlmesh(controlmesh_path):
+	ControlMeshes = []
+	with open(controlmesh_path, "rb") as f:
+		unknown_0x0 = struct.unpack("<I", f.read(0x4))[0]
+		size = struct.unpack("<I", f.read(0x4))[0]
+		
+		f.seek(0x10, 0)
+		for i in range(0, 0x40):
+			cm_coordinates_A = struct.unpack("<fff", f.read(0xC))
+			w = struct.unpack("<f", f.read(0x4))[0]
+			
+			ControlMeshes.append([i, cm_coordinates_A])
+		
+		for i in range(0, 0x40):
+			cm_coordinates_B = struct.unpack("<fff", f.read(0xC))
+			w = struct.unpack("<f", f.read(0x4))[0]
+			
+			ControlMeshes[i].append(cm_coordinates_B)
+		
+		for i in range(0, 0x40):
+			cm_limit = struct.unpack("<ffff", f.read(0x10))
+			
+			ControlMeshes[i].append(cm_limit[0])
+			
+			if len(set(cm_limit)) != 1:
+				print("DEBUG: different limits found in ControlMesh file.")
+				print(cm_limit)
+		
+	return ControlMeshes
 
 
 def read_shader(shader_path):
